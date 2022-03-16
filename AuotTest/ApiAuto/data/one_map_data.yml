@@ -1,0 +1,7 @@
+
+
+
+test_get_real_time_data:
+  # token, curPage, pageSize, pointCode, except_result, except_code, except_msg
+  - ["969B52ECB7DD47DCB26ADFF34D5EF2E1", 1, 20, "JDY-SZ-TK-01", True, 200, "成功"]
+  - ["hello", 1, 20, "JDY-SZ-TK-01", False, 401, "用户未登录或登录失效"]

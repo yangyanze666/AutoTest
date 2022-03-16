@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>测试报告</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function find_all(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sort_column(elem) {
+    toggle_sort_states(elem);
+    var colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    var key;
+    if (elem.classList.contains('numeric')) {
+        key = key_num;
+    } else if (elem.classList.contains('result')) {
+        key = key_result;
+    } else {
+        key = key_alpha;
+    }
+    sort_table(elem, key(colIndex));
+}
+
+function show_all_extras() {
+    find_all('.col-result').forEach(show_extras);
+}
+
+function hide_all_extras() {
+    find_all('.col-result').forEach(hide_extras);
+}
+
+function show_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.remove("collapsed");
+    expandcollapse.classList.remove("expander");
+    expandcollapse.classList.add("collapser");
+}
+
+function hide_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.add("collapsed");
+    expandcollapse.classList.remove("collapser");
+    expandcollapse.classList.add("expander");
+}
+
+function show_filters() {
+    var filter_items = document.getElementsByClassName('filter');
+    for (var i = 0; i < filter_items.length; i++)
+        filter_items[i].hidden = false;
+}
+
+/*
+function add_collapse() {
+    // Add links for show/hide all
+    var resulttable = find('table#results-table');
+    var showhideall = document.createElement("p");
+    showhideall.innerHTML = '<a href="javascript:show_all_extras()">Show all details</a> / ' +
+                            '<a href="javascript:hide_all_extras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);*/
+function add_collapse() {  // modify by linux超
+    // Add links for show/hide all
+    var resulttable = find('table#results-table');
+    var showhideall = document.createElement("p");
+    showhideall.innerHTML = '<a href="javascript:show_all_extras()">显示详情</a> / ' +
+                            '<a href="javascript:hide_all_extras()">隐藏详情</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+    // Add show/hide link to each result
+    find_all('.col-result').forEach(function(elem) {
+        var collapsed = get_query_parameter('collapsed') || 'Passed';
+        var extras = elem.parentNode.nextElementSibling;
+        var expandcollapse = document.createElement("span");
+        if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add("collapsed");
+            expandcollapse.classList.add("expander");
+        } else {
+            expandcollapse.classList.add("collapser");
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener("click", function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains("collapsed")) {
+                show_extras(event.currentTarget);
+            } else {
+                hide_extras(event.currentTarget);
+            }
+        });
+    })
+}
+
+function get_query_parameter(name) {
+    var match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () {
+    reset_sort_headers();
+
+    add_collapse();
+
+    show_filters();
+
+    toggle_sort_states(find('.initial-sort'));
+
+    find_all('.sortable').forEach(function(elem) {
+        elem.addEventListener("click",
+                              function(event) {
+                                  sort_column(elem);
+                              }, false)
+    });
+	// 修改用例报告显示的用例名称 add by linux超
+	var case_name_td = document.getElementsByClassName("col-name");
+		for(var i = 0; i < case_name_td.length; i++)
+			try{
+				case_name_td[i].innerText = case_name_td[i].innerText.split("\[")[1].split("\]")[0];
+			}
+			catch(err){
+				// 如果表格中没有[]会抛异常，如果抛异常我就显示null，如果你想显示别的东西自己改吧，因为通常只要我们使用参数化就有[]显示
+				case_name_td[i].innerText = "测试用例无参数化数据null";
+			}
+
+};
+
+function sort_table(clicked, key_func) {
+    var rows = find_all('.results-table-row');
+    var reversed = !clicked.classList.contains('asc');
+    var sorted_rows = sort(rows, key_func, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    var thead = document.getElementById("results-table-head");
+    document.getElementById('results-table').remove();
+    var parent = document.createElement("table");
+    parent.id = "results-table";
+    parent.appendChild(thead);
+    sorted_rows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName("BODY")[0].appendChild(parent);
+}
+
+function sort(items, key_func, reversed) {
+    var sort_array = items.map(function(item, i) {
+        return [key_func(item), i];
+    });
+    var multiplier = reversed ? -1 : 1;
+
+    sort_array.sort(function(a, b) {
+        var key_a = a[0];
+        var key_b = b[0];
+        return multiplier * (key_a >= key_b ? 1 : -1);
+    });
+
+    return sort_array.map(function(item) {
+        var index = item[1];
+        return items[index];
+    });
+}
+
+function key_alpha(col_index) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[col_index].firstChild.data.toLowerCase();
+    };
+}
+
+function key_num(col_index) {
+    return function(elem) {
+        return parseFloat(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function key_result(col_index) {
+    return function(elem) {
+        var strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+                       'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function reset_sort_headers() {
+    find_all('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    find_all('.sortable').forEach(function(elem) {
+        var icon = document.createElement("div");
+        icon.className = "sort-icon";
+        icon.textContent = "vvv";
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove("desc", "active");
+        elem.classList.add("asc", "inactive");
+    });
+}
+
+function toggle_sort_states(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        reset_sort_headers();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function is_all_rows_hidden(value) {
+  return value.hidden == false;
+}
+
+function filter_table(elem) {
+    var outcome_att = "data-test-result";
+    var outcome = elem.getAttribute(outcome_att);
+    class_outcome = outcome + " results-table-row";
+    var outcome_rows = document.getElementsByClassName(class_outcome);
+
+    for(var i = 0; i < outcome_rows.length; i++){
+        outcome_rows[i].hidden = !elem.checked;
+    }
+
+    var rows = find_all('.results-table-row').filter(is_all_rows_hidden);
+    var all_rows_hidden = rows.length == 0 ? true : false;
+    var not_found_message = document.getElementById("not-found-message");
+    not_found_message.hidden = !all_rows_hidden;
+}
+</script>
+    <h1>report-2021-08-18 171714.html</h1>
+    <p>生成报告时间18-Aug-2021 17:17:15 Pytest-Html版本：<a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.1.1</p>
+    <h2>测试环境</h2>
+    <table id="environment">
+      <tr>
+        <td>JAVA_HOME</td>
+        <td>C:\Program Files\Java\jdk1.8.0_92</td></tr>
+      <tr>
+        <td>Packages</td>
+        <td>{&apos;pytest&apos;: &apos;6.2.4&apos;, &apos;py&apos;: &apos;1.10.0&apos;, &apos;pluggy&apos;: &apos;0.13.1&apos;}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-10-10.0.17763-SP0</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{&apos;allure-pytest&apos;: &apos;2.9.43&apos;, &apos;cov&apos;: &apos;2.12.1&apos;, &apos;html&apos;: &apos;3.1.1&apos;, &apos;metadata&apos;: &apos;1.11.0&apos;, &apos;rerunfailures&apos;: &apos;10.1&apos;}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.9.2</td></tr></table>
+    <h2>用例统计</h2>
+    <p>执行了8个测试用例, 历时:0.97秒 . </p>
+    <p class="filter" hidden="true">(取消)勾选复选框, 以便筛选测试结果</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="passed">6 通过</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="skipped">0 跳过</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="failed">2 失败</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="error">0 错误</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xfailed">0 预期失败</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xpassed">0 预期通过</span>, <input checked="true" class="filter" data-test-result="重跑" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="重跑">0 重跑</span>
+    <h2>测试结果</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">通过/失败</th>
+          <th>用例名称</th>
+          <th class="sortable" col="name">用例</th>
+          <th class="sortable numeric" col="duration">耗时</th>
+          <th>链接</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="5">无测试结果, 试着选择其他测试结果条件</th></tr></thead>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <th>
+        金阳项目-排数户管理
+        </th>
+          <td class="col-name">testcases/api_test/test_get_drain_pipe_baseinfo.py::TestJinYangApi::test_get_inspection_well_api[/drainage/company/add-company-POST-None-None-{\n &quot;address&quot;: &quot;\u81ea\u52a8\u5316\u6d4b\u8bd5\u65b0\u589e&quot;,\n &quot;attachmentList&quot;: [\n  {\n   &quot;contentDescription&quot;: &quot;&quot;,\n   &quot;entryTime&quot;: &quot;&quot;,\n   &quot;fileIdentiful&quot;: &quot;&quot;,\n   &quot;id&quot;: 999,\n   &quot;orderNum&quot;: 0,\n   &quot;remark&quot;: &quot;&quot;,\n   &quot;resourceName&quot;: &quot;&quot;,\n   &quot;updateUserId&quot;: &quot;&quot;,\n   &quot;updateUserName&quot;: &quot;&quot;,\n   &quot;uploadUserId&quot;: &quot;&quot;,\n   &quot;uploadUserName&quot;: &quot;&quot;\n  }\n ],\n &quot;dataSourceName&quot;: &quot;&quot;,\n &quot;dataSourceType&quot;: 0,\n &quot;delAttachmentPkids&quot;: [],\n &quot;delEquipmentPkids&quot;: [],\n &quot;delOutfallPkis&quot;: [],\n &quot;drainageCode&quot;: &quot;&quot;,\n &quot;drainageName&quot;: &quot;&quot;,\n &quot;drainageType&quot;: &quot;&quot;,\n &quot;effectiveTime&quot;: &quot;&quot;,\n &quot;fillPersonId&quot;: &quot;&quot;,\n &quot;fillPersonName&quot;: &quot;&quot;,\n &quot;fillTime&quot;: &quot;&quot;,\n &quot;firstPolluteName&quot;: &quot;&quot;,\n &quot;imageIds&quot;: &quot;&quot;,\n &quot;isKeyPoint&quot;: 0,\n &quot;legalRepresentative&quot;: &quot;&quot;,\n &quot;lgtd&quot;: 0,\n &quot;licenceCode&quot;: &quot;&quot;,\n &quot;livePolluteWater&quot;: 0,\n &quot;lttd&quot;: 0,\n &quot;mainProcess&quot;: &quot;&quot;,\n &quot;moniEquipmentList&quot;: [\n  {\n   &quot;buildTime&quot;: &quot;&quot;,\n   &quot;monitorItem&quot;: &quot;&quot;,\n   &quot;orderNum&quot;: 0,\n   &quot;pkid&quot;: 0,\n   &quot;pointCode&quot;: &quot;&quot;,\n   &quot;pointName&quot;: &quot;&quot;,\n   &quot;sort&quot;: 0,\n   &quot;specificType&quot;: 0,\n   &quot;specificTypeName&quot;: &quot;&quot;,\n   &quot;transferType&quot;: 0,\n   &quot;transferTypeName&quot;: &quot;&quot;\n  }\n ],\n &quot;operator&quot;: &quot;&quot;,\n &quot;operatorTel&quot;: &quot;&quot;,\n &quot;outfallInfoList&quot;: [\n  {\n   &quot;address&quot;: &quot;&quot;,\n   &quot;dischargeWaterDirection&quot;: &quot;&quot;,\n   &quot;dischargeWaterQuantity&quot;: 0,\n   &quot;inspectionWellCode&quot;: &quot;&quot;,\n   &quot;lgtd&quot;: 0,\n   &quot;lttd&quot;: 0,\n   &quot;outfallCode&quot;: &quot;&quot;,\n   &quot;outfallType&quot;: 0,\n   &quot;outfallTypeName&quot;: &quot;&quot;,\n   &quot;pipeDiameter&quot;: 0,\n   &quot;pkid&quot;: 0,\n   &quot;sort&quot;: 0\n  }\n ],\n &quot;owenership&quot;: &quot;&quot;,\n &quot;phoneNumber&quot;: &quot;&quot;,\n &quot;pkid&quot;: 0,\n &quot;productionPolluteWater&quot;: 0,\n &quot;psName&quot;: &quot;&quot;,\n &quot;regionCode&quot;: &quot;&quot;,\n &quot;regionName&quot;: &quot;&quot;,\n &quot;releaseTime&quot;: &quot;&quot;,\n &quot;remark&quot;: &quot;&quot;,\n &quot;secondPolluteName&quot;: &quot;&quot;,\n &quot;selfPrepareWater&quot;: 0,\n &quot;solveMethod&quot;: &quot;&quot;,\n &quot;solveQuantity&quot;: 0,\n &quot;status&quot;: 0,\n &quot;streetCode&quot;: &quot;&quot;,\n &quot;streetName&quot;: &quot;&quot;,\n &quot;tapWater&quot;: 0,\n &quot;totalDischargeWater&quot;: 0,\n &quot;totalWater&quot;: 0,\n &quot;uscCode&quot;: &quot;&quot;\n}\n-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.11</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">self = &lt;AuotTest.ApiAuto.testcases.api_test.test_get_drain_pipe_baseinfo.TestJinYangApi object at 0x000001D5C75F37C0&gt;<br/>url_path = &#x27;/drainage/company/add-company&#x27;, request_method = &#x27;POST&#x27;<br/>headers = None, params = None<br/>json = &#x27;{\n &quot;address&quot;: &quot;自动化测试新增&quot;,\n &quot;attachmentList&quot;: [\n  {\n   &quot;contentDescription&quot;: &quot;&quot;,\n   &quot;entryTime&quot;: &quot;&quot;,\n   &quot;fileIden...eetCode&quot;: &quot;&quot;,\n &quot;streetName&quot;: &quot;&quot;,\n &quot;tapWater&quot;: 0,\n &quot;totalDischargeWater&quot;: 0,\n &quot;totalWater&quot;: 0,\n &quot;uscCode&quot;: &quot;&quot;\n}\n&#x27;<br/>data = None, except_code = 200, except_msg = &#x27;成功&#x27;<br/><br/>    @pytest.mark.parametrize(&quot;url_path, request_method, headers, params, json, data, except_code, except_msg&quot;,<br/>                             get_excel_data(&quot;jin_yang_dev.xlsx&quot;, &quot;排水户管理&quot;))<br/>    def test_get_inspection_well_api(self, url_path, request_method, headers, params, json, data, except_code,<br/>                                     except_msg):<br/>        &quot;&quot;&quot;<br/>        金阳项目-排数户管理<br/>        &quot;&quot;&quot;<br/>    <br/>        logger.info(&quot;*************** 开始执行用例 ***************&quot;)<br/>        result = get_drain_pipe_baseinfo(url_path, request_method, headers, params, json, data)<br/>&gt;       assert_that(result.json().get(&quot;code&quot;), equal_to(except_code))<br/><span class="error">E       AssertionError: </span><br/><span class="error">E       Expected: &lt;200&gt;</span><br/><span class="error">E            but: was &lt;500&gt;</span><br/><br/>testcases\api_test\test_get_drain_pipe_baseinfo.py:54: AssertionError<br/>------------------------------ Captured log call -------------------------------<br/>INFO     log:test_get_drain_pipe_baseinfo.py:52 *************** 开始执行用例 ***************
+INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://10.25.82.238:31501/drainage/company/add-company
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;address&quot;: &quot;自动化测试新增&quot;,
+    &quot;attachmentList&quot;: [
+        {
+            &quot;contentDescription&quot;: &quot;&quot;,
+            &quot;entryTime&quot;: &quot;&quot;,
+            &quot;fileIdentiful&quot;: &quot;&quot;,
+            &quot;id&quot;: 999,
+            &quot;orderNum&quot;: 0,
+            &quot;remark&quot;: &quot;&quot;,
+            &quot;resourceName&quot;: &quot;&quot;,
+            &quot;updateUserId&quot;: &quot;&quot;,
+            &quot;updateUserName&quot;: &quot;&quot;,
+            &quot;uploadUserId&quot;: &quot;&quot;,
+            &quot;uploadUserName&quot;: &quot;&quot;
+        }
+    ],
+    &quot;dataSourceName&quot;: &quot;&quot;,
+    &quot;dataSourceType&quot;: 0,
+    &quot;delAttachmentPkids&quot;: [],
+    &quot;delEquipmentPkids&quot;: [],
+    &quot;delOutfallPkis&quot;: [],
+    &quot;drainageCode&quot;: &quot;&quot;,
+    &quot;drainageName&quot;: &quot;&quot;,
+    &quot;drainageType&quot;: &quot;&quot;,
+    &quot;effectiveTime&quot;: &quot;&quot;,
+    &quot;fillPersonId&quot;: &quot;&quot;,
+    &quot;fillPersonName&quot;: &quot;&quot;,
+    &quot;fillTime&quot;: &quot;&quot;,
+    &quot;firstPolluteName&quot;: &quot;&quot;,
+    &quot;imageIds&quot;: &quot;&quot;,
+    &quot;isKeyPoint&quot;: 0,
+    &quot;legalRepresentative&quot;: &quot;&quot;,
+    &quot;lgtd&quot;: 0,
+    &quot;licenceCode&quot;: &quot;&quot;,
+    &quot;livePolluteWater&quot;: 0,
+    &quot;lttd&quot;: 0,
+    &quot;mainProcess&quot;: &quot;&quot;,
+    &quot;moniEquipmentList&quot;: [
+        {
+            &quot;buildTime&quot;: &quot;&quot;,
+            &quot;monitorItem&quot;: &quot;&quot;,
+            &quot;orderNum&quot;: 0,
+            &quot;pkid&quot;: 0,
+            &quot;pointCode&quot;: &quot;&quot;,
+            &quot;pointName&quot;: &quot;&quot;,
+            &quot;sort&quot;: 0,
+            &quot;specificType&quot;: 0,
+            &quot;specificTypeName&quot;: &quot;&quot;,
+            &quot;transferType&quot;: 0,
+            &quot;transferTypeName&quot;: &quot;&quot;
+        }
+    ],
+    &quot;operator&quot;: &quot;&quot;,
+    &quot;operatorTel&quot;: &quot;&quot;,
+    &quot;outfallInfoList&quot;: [
+        {
+            &quot;address&quot;: &quot;&quot;,
+            &quot;dischargeWaterDirection&quot;: &quot;&quot;,
+            &quot;dischargeWaterQuantity&quot;: 0,
+            &quot;inspectionWellCode&quot;: &quot;&quot;,
+            &quot;lgtd&quot;: 0,
+            &quot;lttd&quot;: 0,
+            &quot;outfallCode&quot;: &quot;&quot;,
+            &quot;outfallType&quot;: 0,
+            &quot;outfallTypeName&quot;: &quot;&quot;,
+            &quot;pipeDiameter&quot;: 0,
+            &quot;pkid&quot;: 0,
+            &quot;sort&quot;: 0
+        }
+    ],
+    &quot;owenership&quot;: &quot;&quot;,
+    &quot;phoneNumber&quot;: &quot;&quot;,
+    &quot;pkid&quot;: 0,
+    &quot;productionPolluteWater&quot;: 0,
+    &quot;psName&quot;: &quot;&quot;,
+    &quot;regionCode&quot;: &quot;&quot;,
+    &quot;regionName&quot;: &quot;&quot;,
+    &quot;releaseTime&quot;: &quot;&quot;,
+    &quot;remark&quot;: &quot;&quot;,
+    &quot;secondPolluteName&quot;: &quot;&quot;,
+    &quot;selfPrepareWater&quot;: 0,
+    &quot;solveMethod&quot;: &quot;&quot;,
+    &quot;solveQuantity&quot;: 0,
+    &quot;status&quot;: 0,
+    &quot;streetCode&quot;: &quot;&quot;,
+    &quot;streetName&quot;: &quot;&quot;,
+    &quot;tapWater&quot;: 0,
+    &quot;totalDischargeWater&quot;: 0,
+    &quot;totalWater&quot;: 0,
+    &quot;uscCode&quot;: &quot;&quot;
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null</div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <th>
+        金阳项目-排数户管理
+        </th>
+          <td class="col-name">testcases/api_test/test_get_drain_pipe_baseinfo.py::TestJinYangApi::test_get_inspection_well_api[/drainage/company/update-company-POST-None-None-{\n &quot;address&quot;: &quot;\u81ea\u52a8\u5316\u6d4b\u8bd5\u4fee\u6539&quot;,\n &quot;attachmentList&quot;: [\n  {\n   &quot;contentDescription&quot;: &quot;&quot;,\n   &quot;entryTime&quot;: &quot;&quot;,\n   &quot;fileIdentiful&quot;: &quot;&quot;,\n   &quot;id&quot;: 999,\n   &quot;orderNum&quot;: 0,\n   &quot;remark&quot;: &quot;&quot;,\n   &quot;resourceName&quot;: &quot;&quot;,\n   &quot;updateUserId&quot;: &quot;&quot;,\n   &quot;updateUserName&quot;: &quot;&quot;,\n   &quot;uploadUserId&quot;: &quot;&quot;,\n   &quot;uploadUserName&quot;: &quot;&quot;\n  }\n ],\n &quot;dataSourceName&quot;: &quot;&quot;,\n &quot;dataSourceType&quot;: 0,\n &quot;delAttachmentPkids&quot;: [],\n &quot;delEquipmentPkids&quot;: [],\n &quot;delOutfallPkis&quot;: [],\n &quot;drainageCode&quot;: &quot;&quot;,\n &quot;drainageName&quot;: &quot;&quot;,\n &quot;drainageType&quot;: &quot;&quot;,\n &quot;effectiveTime&quot;: &quot;&quot;,\n &quot;fillPersonId&quot;: &quot;&quot;,\n &quot;fillPersonName&quot;: &quot;&quot;,\n &quot;fillTime&quot;: &quot;&quot;,\n &quot;firstPolluteName&quot;: &quot;&quot;,\n &quot;imageIds&quot;: &quot;&quot;,\n &quot;isKeyPoint&quot;: 0,\n &quot;legalRepresentative&quot;: &quot;&quot;,\n &quot;lgtd&quot;: 0,\n &quot;licenceCode&quot;: &quot;&quot;,\n &quot;livePolluteWater&quot;: 0,\n &quot;lttd&quot;: 0,\n &quot;mainProcess&quot;: &quot;&quot;,\n &quot;moniEquipmentList&quot;: [\n  {\n   &quot;buildTime&quot;: &quot;&quot;,\n   &quot;monitorItem&quot;: &quot;&quot;,\n   &quot;orderNum&quot;: 0,\n   &quot;pkid&quot;: 0,\n   &quot;pointCode&quot;: &quot;&quot;,\n   &quot;pointName&quot;: &quot;&quot;,\n   &quot;sort&quot;: 0,\n   &quot;specificType&quot;: 0,\n   &quot;specificTypeName&quot;: &quot;&quot;,\n   &quot;transferType&quot;: 0,\n   &quot;transferTypeName&quot;: &quot;&quot;\n  }\n ],\n &quot;operator&quot;: &quot;&quot;,\n &quot;operatorTel&quot;: &quot;&quot;,\n &quot;outfallInfoList&quot;: [\n  {\n   &quot;address&quot;: &quot;&quot;,\n   &quot;dischargeWaterDirection&quot;: &quot;&quot;,\n   &quot;dischargeWaterQuantity&quot;: 0,\n   &quot;inspectionWellCode&quot;: &quot;&quot;,\n   &quot;lgtd&quot;: 0,\n   &quot;lttd&quot;: 0,\n   &quot;outfallCode&quot;: &quot;&quot;,\n   &quot;outfallType&quot;: 0,\n   &quot;outfallTypeName&quot;: &quot;&quot;,\n   &quot;pipeDiameter&quot;: 0,\n   &quot;pkid&quot;: 0,\n   &quot;sort&quot;: 0\n  }\n ],\n &quot;owenership&quot;: &quot;&quot;,\n &quot;phoneNumber&quot;: &quot;&quot;,\n &quot;pkid&quot;: 0,\n &quot;productionPolluteWater&quot;: 0,\n &quot;psName&quot;: &quot;&quot;,\n &quot;regionCode&quot;: &quot;&quot;,\n &quot;regionName&quot;: &quot;&quot;,\n &quot;releaseTime&quot;: &quot;&quot;,\n &quot;remark&quot;: &quot;&quot;,\n &quot;secondPolluteName&quot;: &quot;&quot;,\n &quot;selfPrepareWater&quot;: 0,\n &quot;solveMethod&quot;: &quot;&quot;,\n &quot;solveQuantity&quot;: 0,\n &quot;status&quot;: 0,\n &quot;streetCode&quot;: &quot;&quot;,\n &quot;streetName&quot;: &quot;&quot;,\n &quot;tapWater&quot;: 0,\n &quot;totalDischargeWater&quot;: 0,\n &quot;totalWater&quot;: 0,\n &quot;uscCode&quot;: &quot;&quot;\n}\n-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.07</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">self = &lt;AuotTest.ApiAuto.testcases.api_test.test_get_drain_pipe_baseinfo.TestJinYangApi object at 0x000001D5C7626FD0&gt;<br/>url_path = &#x27;/drainage/company/update-company&#x27;, request_method = &#x27;POST&#x27;<br/>headers = None, params = None<br/>json = &#x27;{\n &quot;address&quot;: &quot;自动化测试修改&quot;,\n &quot;attachmentList&quot;: [\n  {\n   &quot;contentDescription&quot;: &quot;&quot;,\n   &quot;entryTime&quot;: &quot;&quot;,\n   &quot;fileIden...eetCode&quot;: &quot;&quot;,\n &quot;streetName&quot;: &quot;&quot;,\n &quot;tapWater&quot;: 0,\n &quot;totalDischargeWater&quot;: 0,\n &quot;totalWater&quot;: 0,\n &quot;uscCode&quot;: &quot;&quot;\n}\n&#x27;<br/>data = None, except_code = 200, except_msg = &#x27;成功&#x27;<br/><br/>    @pytest.mark.parametrize(&quot;url_path, request_method, headers, params, json, data, except_code, except_msg&quot;,<br/>                             get_excel_data(&quot;jin_yang_dev.xlsx&quot;, &quot;排水户管理&quot;))<br/>    def test_get_inspection_well_api(self, url_path, request_method, headers, params, json, data, except_code,<br/>                                     except_msg):<br/>        &quot;&quot;&quot;<br/>        金阳项目-排数户管理<br/>        &quot;&quot;&quot;<br/>    <br/>        logger.info(&quot;*************** 开始执行用例 ***************&quot;)<br/>        result = get_drain_pipe_baseinfo(url_path, request_method, headers, params, json, data)<br/>&gt;       assert_that(result.json().get(&quot;code&quot;), equal_to(except_code))<br/><span class="error">E       AssertionError: </span><br/><span class="error">E       Expected: &lt;200&gt;</span><br/><span class="error">E            but: was &lt;500&gt;</span><br/><br/>testcases\api_test\test_get_drain_pipe_baseinfo.py:54: AssertionError<br/>------------------------------ Captured log call -------------------------------<br/>INFO     log:test_get_drain_pipe_baseinfo.py:52 *************** 开始执行用例 ***************
+INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://10.25.82.238:31501/drainage/company/update-company
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;address&quot;: &quot;自动化测试修改&quot;,
+    &quot;attachmentList&quot;: [
+        {
+            &quot;contentDescription&quot;: &quot;&quot;,
+            &quot;entryTime&quot;: &quot;&quot;,
+            &quot;fileIdentiful&quot;: &quot;&quot;,
+            &quot;id&quot;: 999,
+            &quot;orderNum&quot;: 0,
+            &quot;remark&quot;: &quot;&quot;,
+            &quot;resourceName&quot;: &quot;&quot;,
+            &quot;updateUserId&quot;: &quot;&quot;,
+            &quot;updateUserName&quot;: &quot;&quot;,
+            &quot;uploadUserId&quot;: &quot;&quot;,
+            &quot;uploadUserName&quot;: &quot;&quot;
+        }
+    ],
+    &quot;dataSourceName&quot;: &quot;&quot;,
+    &quot;dataSourceType&quot;: 0,
+    &quot;delAttachmentPkids&quot;: [],
+    &quot;delEquipmentPkids&quot;: [],
+    &quot;delOutfallPkis&quot;: [],
+    &quot;drainageCode&quot;: &quot;&quot;,
+    &quot;drainageName&quot;: &quot;&quot;,
+    &quot;drainageType&quot;: &quot;&quot;,
+    &quot;effectiveTime&quot;: &quot;&quot;,
+    &quot;fillPersonId&quot;: &quot;&quot;,
+    &quot;fillPersonName&quot;: &quot;&quot;,
+    &quot;fillTime&quot;: &quot;&quot;,
+    &quot;firstPolluteName&quot;: &quot;&quot;,
+    &quot;imageIds&quot;: &quot;&quot;,
+    &quot;isKeyPoint&quot;: 0,
+    &quot;legalRepresentative&quot;: &quot;&quot;,
+    &quot;lgtd&quot;: 0,
+    &quot;licenceCode&quot;: &quot;&quot;,
+    &quot;livePolluteWater&quot;: 0,
+    &quot;lttd&quot;: 0,
+    &quot;mainProcess&quot;: &quot;&quot;,
+    &quot;moniEquipmentList&quot;: [
+        {
+            &quot;buildTime&quot;: &quot;&quot;,
+            &quot;monitorItem&quot;: &quot;&quot;,
+            &quot;orderNum&quot;: 0,
+            &quot;pkid&quot;: 0,
+            &quot;pointCode&quot;: &quot;&quot;,
+            &quot;pointName&quot;: &quot;&quot;,
+            &quot;sort&quot;: 0,
+            &quot;specificType&quot;: 0,
+            &quot;specificTypeName&quot;: &quot;&quot;,
+            &quot;transferType&quot;: 0,
+            &quot;transferTypeName&quot;: &quot;&quot;
+        }
+    ],
+    &quot;operator&quot;: &quot;&quot;,
+    &quot;operatorTel&quot;: &quot;&quot;,
+    &quot;outfallInfoList&quot;: [
+        {
+            &quot;address&quot;: &quot;&quot;,
+            &quot;dischargeWaterDirection&quot;: &quot;&quot;,
+            &quot;dischargeWaterQuantity&quot;: 0,
+            &quot;inspectionWellCode&quot;: &quot;&quot;,
+            &quot;lgtd&quot;: 0,
+            &quot;lttd&quot;: 0,
+            &quot;outfallCode&quot;: &quot;&quot;,
+            &quot;outfallType&quot;: 0,
+            &quot;outfallTypeName&quot;: &quot;&quot;,
+            &quot;pipeDiameter&quot;: 0,
+            &quot;pkid&quot;: 0,
+            &quot;sort&quot;: 0
+        }
+    ],
+    &quot;owenership&quot;: &quot;&quot;,
+    &quot;phoneNumber&quot;: &quot;&quot;,
+    &quot;pkid&quot;: 0,
+    &quot;productionPolluteWater&quot;: 0,
+    &quot;psName&quot;: &quot;&quot;,
+    &quot;regionCode&quot;: &quot;&quot;,
+    &quot;regionName&quot;: &quot;&quot;,
+    &quot;releaseTime&quot;: &quot;&quot;,
+    &quot;remark&quot;: &quot;&quot;,
+    &quot;secondPolluteName&quot;: &quot;&quot;,
+    &quot;selfPrepareWater&quot;: 0,
+    &quot;solveMethod&quot;: &quot;&quot;,
+    &quot;solveQuantity&quot;: 0,
+    &quot;status&quot;: 0,
+    &quot;streetCode&quot;: &quot;&quot;,
+    &quot;streetName&quot;: &quot;&quot;,
+    &quot;tapWater&quot;: 0,
+    &quot;totalDischargeWater&quot;: 0,
+    &quot;totalWater&quot;: 0,
+    &quot;uscCode&quot;: &quot;&quot;
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-排水管管理
+        </th>
+          <td class="col-name">testcases/api_test/test_get_drain_pipe_baseinfo.py::TestJinYangApi::test_get_drain_pipe_api[/drain-pipe/desc-POST-None-None-{\n &quot;code&quot;: &quot;1234567891234567890&quot;\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.13</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:test_get_drain_pipe_baseinfo.py:16 *************** 开始执行用例 ***************
+INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://10.25.82.238:31501/drain-pipe/desc
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;code&quot;: &quot;1234567891234567890&quot;
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:test_get_drain_pipe_baseinfo.py:22 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_get_drain_pipe_baseinfo.py:24 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-排水管管理
+        </th>
+          <td class="col-name">testcases/api_test/test_get_drain_pipe_baseinfo.py::TestJinYangApi::test_get_drain_pipe_api[/drain-pipe/list-POST-None-None-{\n &quot;category&quot;: 0,\n &quot;curPage&quot;: 1,\n &quot;drainPipeName&quot;: &quot;&quot;,\n &quot;endTime&quot;: &quot;&quot;,\n &quot;pageSize&quot;: 5,\n &quot;startTime&quot;: &quot;&quot;,\n &quot;status&quot;: 0,\n &quot;type&quot;: 0\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.06</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:test_get_drain_pipe_baseinfo.py:16 *************** 开始执行用例 ***************
+INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://10.25.82.238:31501/drain-pipe/list
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;category&quot;: 0,
+    &quot;curPage&quot;: 1,
+    &quot;drainPipeName&quot;: &quot;&quot;,
+    &quot;endTime&quot;: &quot;&quot;,
+    &quot;pageSize&quot;: 5,
+    &quot;startTime&quot;: &quot;&quot;,
+    &quot;status&quot;: 0,
+    &quot;type&quot;: 0
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:test_get_drain_pipe_baseinfo.py:22 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_get_drain_pipe_baseinfo.py:24 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-排水管管理
+        </th>
+          <td class="col-name">testcases/api_test/test_get_drain_pipe_baseinfo.py::TestJinYangApi::test_get_drain_pipe_api[/drain-pipe/attached-POST-None-None-{\n &quot;drainPipeCode&quot;: &quot;&quot;\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.06</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:test_get_drain_pipe_baseinfo.py:16 *************** 开始执行用例 ***************
+INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://10.25.82.238:31501/drain-pipe/attached
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;drainPipeCode&quot;: &quot;&quot;
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:test_get_drain_pipe_baseinfo.py:22 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_get_drain_pipe_baseinfo.py:24 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-排水管管理
+        </th>
+          <td class="col-name">testcases/api_test/test_get_drain_pipe_baseinfo.py::TestJinYangApi::test_get_drain_pipe_api[/drain-pipe/export-param-POST-None-None-{\n &quot;category&quot;: 0,\n &quot;curPage&quot;: 1,\n &quot;drainPipeName&quot;: &quot;&quot;,\n &quot;endTime&quot;: &quot;&quot;,\n &quot;pageSize&quot;: 5,\n &quot;startTime&quot;: &quot;&quot;,\n &quot;status&quot;: 0,\n &quot;type&quot;: 0\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.06</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:test_get_drain_pipe_baseinfo.py:16 *************** 开始执行用例 ***************
+INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://10.25.82.238:31501/drain-pipe/export-param
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;category&quot;: 0,
+    &quot;curPage&quot;: 1,
+    &quot;drainPipeName&quot;: &quot;&quot;,
+    &quot;endTime&quot;: &quot;&quot;,
+    &quot;pageSize&quot;: 5,
+    &quot;startTime&quot;: &quot;&quot;,
+    &quot;status&quot;: 0,
+    &quot;type&quot;: 0
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:test_get_drain_pipe_baseinfo.py:22 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_get_drain_pipe_baseinfo.py:24 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-排数户管理
+        </th>
+          <td class="col-name">testcases/api_test/test_get_drain_pipe_baseinfo.py::TestJinYangApi::test_get_inspection_well_api[/drainage/company/company-detail-POST-None-None-{\n &quot;pkid&quot;: 10\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.06</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:test_get_drain_pipe_baseinfo.py:52 *************** 开始执行用例 ***************
+INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://10.25.82.238:31501/drainage/company/company-detail
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;pkid&quot;: 10
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:test_get_drain_pipe_baseinfo.py:57 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_get_drain_pipe_baseinfo.py:59 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-排数户管理
+        </th>
+          <td class="col-name">testcases/api_test/test_get_drain_pipe_baseinfo.py::TestJinYangApi::test_get_inspection_well_api[/drainage/company/get-company-list-POST-None-None-{\n &quot;curPage&quot;: 1,\n &quot;effectiveTime&quot;: &quot;&quot;,\n &quot;name&quot;: &quot;&quot;,\n &quot;pageSize&quot;: 5,\n &quot;status&quot;: 0,\n &quot;type&quot;: 0\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.09</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:test_get_drain_pipe_baseinfo.py:52 *************** 开始执行用例 ***************
+INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://10.25.82.238:31501/drainage/company/get-company-list
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;curPage&quot;: 1,
+    &quot;effectiveTime&quot;: &quot;&quot;,
+    &quot;name&quot;: &quot;&quot;,
+    &quot;pageSize&quot;: 5,
+    &quot;status&quot;: 0,
+    &quot;type&quot;: 0
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:test_get_drain_pipe_baseinfo.py:57 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_get_drain_pipe_baseinfo.py:59 *************** 结束执行用例 ***************</div></td></tr></tbody></table></body></html>

@@ -1,0 +1,2007 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>测试报告</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function find_all(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sort_column(elem) {
+    toggle_sort_states(elem);
+    var colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    var key;
+    if (elem.classList.contains('numeric')) {
+        key = key_num;
+    } else if (elem.classList.contains('result')) {
+        key = key_result;
+    } else {
+        key = key_alpha;
+    }
+    sort_table(elem, key(colIndex));
+}
+
+function show_all_extras() {
+    find_all('.col-result').forEach(show_extras);
+}
+
+function hide_all_extras() {
+    find_all('.col-result').forEach(hide_extras);
+}
+
+function show_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.remove("collapsed");
+    expandcollapse.classList.remove("expander");
+    expandcollapse.classList.add("collapser");
+}
+
+function hide_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.add("collapsed");
+    expandcollapse.classList.remove("collapser");
+    expandcollapse.classList.add("expander");
+}
+
+function show_filters() {
+    var filter_items = document.getElementsByClassName('filter');
+    for (var i = 0; i < filter_items.length; i++)
+        filter_items[i].hidden = false;
+}
+
+/*
+function add_collapse() {
+    // Add links for show/hide all
+    var resulttable = find('table#results-table');
+    var showhideall = document.createElement("p");
+    showhideall.innerHTML = '<a href="javascript:show_all_extras()">Show all details</a> / ' +
+                            '<a href="javascript:hide_all_extras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);*/
+function add_collapse() {  // modify by linux超
+    // Add links for show/hide all
+    var resulttable = find('table#results-table');
+    var showhideall = document.createElement("p");
+    showhideall.innerHTML = '<a href="javascript:show_all_extras()">显示详情</a> / ' +
+                            '<a href="javascript:hide_all_extras()">隐藏详情</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+    // Add show/hide link to each result
+    find_all('.col-result').forEach(function(elem) {
+        var collapsed = get_query_parameter('collapsed') || 'Passed';
+        var extras = elem.parentNode.nextElementSibling;
+        var expandcollapse = document.createElement("span");
+        if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add("collapsed");
+            expandcollapse.classList.add("expander");
+        } else {
+            expandcollapse.classList.add("collapser");
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener("click", function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains("collapsed")) {
+                show_extras(event.currentTarget);
+            } else {
+                hide_extras(event.currentTarget);
+            }
+        });
+    })
+}
+
+function get_query_parameter(name) {
+    var match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () {
+    reset_sort_headers();
+
+    add_collapse();
+
+    show_filters();
+
+    toggle_sort_states(find('.initial-sort'));
+
+    find_all('.sortable').forEach(function(elem) {
+        elem.addEventListener("click",
+                              function(event) {
+                                  sort_column(elem);
+                              }, false)
+    });
+	// 修改用例报告显示的用例名称 add by linux超
+	var case_name_td = document.getElementsByClassName("col-name");
+		for(var i = 0; i < case_name_td.length; i++)
+			try{
+				case_name_td[i].innerText = case_name_td[i].innerText.split("\[")[1].split("\]")[0];
+			}
+			catch(err){
+				// 如果表格中没有[]会抛异常，如果抛异常我就显示null，如果你想显示别的东西自己改吧，因为通常只要我们使用参数化就有[]显示
+				case_name_td[i].innerText = "测试用例无参数化数据null";
+			}
+
+};
+
+function sort_table(clicked, key_func) {
+    var rows = find_all('.results-table-row');
+    var reversed = !clicked.classList.contains('asc');
+    var sorted_rows = sort(rows, key_func, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    var thead = document.getElementById("results-table-head");
+    document.getElementById('results-table').remove();
+    var parent = document.createElement("table");
+    parent.id = "results-table";
+    parent.appendChild(thead);
+    sorted_rows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName("BODY")[0].appendChild(parent);
+}
+
+function sort(items, key_func, reversed) {
+    var sort_array = items.map(function(item, i) {
+        return [key_func(item), i];
+    });
+    var multiplier = reversed ? -1 : 1;
+
+    sort_array.sort(function(a, b) {
+        var key_a = a[0];
+        var key_b = b[0];
+        return multiplier * (key_a >= key_b ? 1 : -1);
+    });
+
+    return sort_array.map(function(item) {
+        var index = item[1];
+        return items[index];
+    });
+}
+
+function key_alpha(col_index) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[col_index].firstChild.data.toLowerCase();
+    };
+}
+
+function key_num(col_index) {
+    return function(elem) {
+        return parseFloat(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function key_result(col_index) {
+    return function(elem) {
+        var strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+                       'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function reset_sort_headers() {
+    find_all('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    find_all('.sortable').forEach(function(elem) {
+        var icon = document.createElement("div");
+        icon.className = "sort-icon";
+        icon.textContent = "vvv";
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove("desc", "active");
+        elem.classList.add("asc", "inactive");
+    });
+}
+
+function toggle_sort_states(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        reset_sort_headers();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function is_all_rows_hidden(value) {
+  return value.hidden == false;
+}
+
+function filter_table(elem) {
+    var outcome_att = "data-test-result";
+    var outcome = elem.getAttribute(outcome_att);
+    class_outcome = outcome + " results-table-row";
+    var outcome_rows = document.getElementsByClassName(class_outcome);
+
+    for(var i = 0; i < outcome_rows.length; i++){
+        outcome_rows[i].hidden = !elem.checked;
+    }
+
+    var rows = find_all('.results-table-row').filter(is_all_rows_hidden);
+    var all_rows_hidden = rows.length == 0 ? true : false;
+    var not_found_message = document.getElementById("not-found-message");
+    not_found_message.hidden = !all_rows_hidden;
+}
+</script>
+    <h1>report-2022-01-19 110423.html</h1>
+    <p>生成报告时间19-Jan-2022 11:04:39 Pytest-Html版本：<a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.1.1</p>
+    <h2>测试环境</h2>
+    <table id="environment">
+      <tr>
+        <td>JAVA_HOME</td>
+        <td>C:\Program Files\Java\jdk1.8.0_92</td></tr>
+      <tr>
+        <td>Packages</td>
+        <td>{&apos;pytest&apos;: &apos;6.2.4&apos;, &apos;py&apos;: &apos;1.10.0&apos;, &apos;pluggy&apos;: &apos;0.13.1&apos;}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-10-10.0.17763-SP0</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{&apos;allure-pytest&apos;: &apos;2.9.43&apos;, &apos;cov&apos;: &apos;2.12.1&apos;, &apos;html&apos;: &apos;3.1.1&apos;, &apos;metadata&apos;: &apos;1.11.0&apos;, &apos;ordering&apos;: &apos;0.6&apos;, &apos;rerunfailures&apos;: &apos;10.1&apos;}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.9.2</td></tr></table>
+    <h2>用例统计</h2>
+    <p>执行了46个测试用例, 历时:9.34秒 . </p>
+    <p class="filter" hidden="true">(取消)勾选复选框, 以便筛选测试结果</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="passed">39 通过</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="skipped">0 跳过</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="failed">7 失败</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="error">0 错误</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xfailed">0 预期失败</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xpassed">0 预期通过</span>, <input checked="true" class="filter" data-test-result="重跑" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="重跑">0 重跑</span>
+    <h2>测试结果</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">通过/失败</th>
+          <th>用例名称</th>
+          <th class="sortable" col="name">用例</th>
+          <th class="sortable numeric" col="duration">耗时</th>
+          <th>链接</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="5">无测试结果, 试着选择其他测试结果条件</th></tr></thead>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <th>
+        金阳项目-监测点管理-唯一性校验
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_api_monitor_point_add_modify_delete.py::TestJinYangApiCreateModifyDelete::test_verify_unique_pkid[/udims/monitor-point/check-POST-None-None-{\n&quot;pkid&quot;: 27,\n &quot;pointName&quot;: &quot;\u897f\u5b89\u5e02\u7682\u6cb3\u76d1\u6d4b\u70b9\u65b0\u589e\u6d4b\u8bd5&quot;\n}-None-200-True]</td>
+          <td class="col-duration">0.09</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">self = &lt;AuotTest.ApiAuto.testcases.jin_yang_dev.test_jy_api_monitor_point_add_modify_delete.TestJinYangApiCreateModifyDelete object at 0x000001FC6AAF7D00&gt;<br/>url_path = &#x27;/udims/monitor-point/check&#x27;, request_method = &#x27;POST&#x27;, headers = None<br/>params = None, json_data = &#x27;{\n&quot;pkid&quot;: 27,\n &quot;pointName&quot;: &quot;西安市皂河监测点新增测试&quot;\n}&#x27;<br/>data = None, except_code = 200, except_msg = &#x27;True&#x27;<br/><br/>    @pytest.mark.parametrize(&quot;url_path, request_method, headers, params, json_data, data, except_code, except_msg&quot;,<br/>                             get_excel_data(&quot;jy_add_modify_delete.xlsx&quot;, &quot;监测点位信息唯一性校验&quot;))<br/>    def test_verify_unique_pkid(self, url_path, request_method, headers, params, json_data, data, except_code,<br/>                                except_msg):<br/>        &quot;&quot;&quot;<br/>        金阳项目-监测点管理-唯一性校验<br/>        &quot;&quot;&quot;<br/>    <br/>        pkid_data = json.loads(json_data)<br/>        pkid_data[&quot;pkid&quot;] = pkid<br/>    <br/>        json_data_modify = json.dumps(pkid_data)<br/>    <br/>        result = get_drain_pipe_baseinfo(url_path, request_method, headers, params, json_data_modify, data)<br/>        assert_that(result.json().get(&quot;code&quot;), equal_to(except_code))<br/>&gt;       assert result.json().get(&quot;data&quot;) == ast.literal_eval(except_msg)<br/><span class="error">E       assert False == True</span><br/><span class="error">E         +False</span><br/><span class="error">E         -True</span><br/><br/>testcases\jin_yang_dev\test_jy_api_monitor_point_add_modify_delete.py:47: AssertionError<br/>------------------------------ Captured log call -------------------------------<br/>INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/monitor-point/check
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;pkid&quot;: &quot;c0af59a3-b764-49b8-9039-9ca7f9427c6a&quot;,
+    &quot;pointName&quot;: &quot;西安市皂河监测点新增测试&quot;
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;,&quot;data&quot;:false}</div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <th>
+        金阳项目-泵站管理-唯一性校验
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_api_pump_station_add_modify_delete.py::TestJinYangApiCreateModifyDelete::test_verify_unique_pkid[/udims/pump-station/exist-POST-None-None-{\n &quot;pkid&quot;: 0,\n &quot;psName&quot;: &quot;\u9ad8\u65b0\u533a\u6cf5\u7ad9\u91cd\u590d&quot;\n}-None-200-True]</td>
+          <td class="col-duration">0.09</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">self = &lt;AuotTest.ApiAuto.testcases.jin_yang_dev.test_jy_api_pump_station_add_modify_delete.TestJinYangApiCreateModifyDelete object at 0x000001FC6A791310&gt;<br/>url_path = &#x27;/udims/pump-station/exist&#x27;, request_method = &#x27;POST&#x27;, headers = None<br/>params = None, json_data = &#x27;{\n &quot;pkid&quot;: 0,\n &quot;psName&quot;: &quot;高新区泵站重复&quot;\n}&#x27;<br/>data = None, except_code = 200, except_msg = &#x27;True&#x27;<br/><br/>    @pytest.mark.parametrize(&quot;url_path, request_method, headers, params, json_data, data, except_code, except_msg&quot;,<br/>                             get_excel_data(&quot;jy_add_modify_delete.xlsx&quot;, &quot;泵站信息唯一性校验&quot;))<br/>    def test_verify_unique_pkid(self, url_path, request_method, headers, params, json_data, data, except_code,<br/>                                except_msg):<br/>        &quot;&quot;&quot;<br/>        金阳项目-泵站管理-唯一性校验<br/>        &quot;&quot;&quot;<br/>    <br/>        pkid_data = json.loads(json_data)<br/>        pkid_data[&quot;pkid&quot;] = pkid<br/>    <br/>        json_data_modify = json.dumps(pkid_data)<br/>    <br/>        result = get_drain_pipe_baseinfo(url_path, request_method, headers, params, json_data_modify, data)<br/>        assert_that(result.json().get(&quot;code&quot;), equal_to(except_code))<br/>&gt;       assert result.json().get(&quot;data&quot;) == ast.literal_eval(except_msg)<br/><span class="error">E       assert False == True</span><br/><span class="error">E         +False</span><br/><span class="error">E         -True</span><br/><br/>testcases\jin_yang_dev\test_jy_api_pump_station_add_modify_delete.py:47: AssertionError<br/>------------------------------ Captured log call -------------------------------<br/>INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/pump-station/exist
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;pkid&quot;: &quot;b7238093-6ef8-4b92-abce-cdf51dff1ba4&quot;,
+    &quot;psName&quot;: &quot;高新区泵站重复&quot;
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;,&quot;data&quot;:false}</div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <th>
+        金阳项目-污水厂管理-唯一性校验
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_api_waste_water_factory_add_modify_delete.py::TestJYWasteWaterFactoryApiCreateModifyDelete::test_verify_unique_pkid[/udims/wasteWater-factory/exist-POST-None-None-{\n &quot;name&quot;: &quot;\u897f\u5b89\u5e02\u96c1\u5854\u533a\u6c61\u6c34\u5904\u7406\u5382\u91cd\u590d&quot;,\n &quot;pkid&quot;: 0\n}-None-200-True]</td>
+          <td class="col-duration">0.08</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">self = &lt;AuotTest.ApiAuto.testcases.jin_yang_dev.test_jy_api_waste_water_factory_add_modify_delete.TestJYWasteWaterFactoryApiCreateModifyDelete object at 0x000001FC6A8DB0D0&gt;<br/>url_path = &#x27;/udims/wasteWater-factory/exist&#x27;, request_method = &#x27;POST&#x27;<br/>headers = None, params = None<br/>json_data = &#x27;{\n &quot;name&quot;: &quot;西安市雁塔区污水处理厂重复&quot;,\n &quot;pkid&quot;: 0\n}&#x27;, data = None<br/>except_code = 200, except_msg = &#x27;True&#x27;<br/><br/>    @pytest.mark.parametrize(&quot;url_path, request_method, headers, params, json_data, data, except_code, except_msg&quot;,<br/>                             get_excel_data(&quot;jy_add_modify_delete.xlsx&quot;, &quot;污水厂唯一性校验&quot;))<br/>    def test_verify_unique_pkid(self, url_path, request_method, headers, params, json_data, data, except_code,<br/>                                except_msg):<br/>        &quot;&quot;&quot;<br/>        金阳项目-污水厂管理-唯一性校验<br/>        &quot;&quot;&quot;<br/>    <br/>        pkid_data = json.loads(json_data)<br/>        pkid_data[&quot;pkid&quot;] = pkid<br/>        json_data_modify = json.dumps(pkid_data)<br/>    <br/>        result = get_drain_pipe_baseinfo(url_path, request_method, headers, params, json_data_modify, data)<br/>        assert_that(result.json().get(&quot;code&quot;), equal_to(except_code))<br/>&gt;       assert result.json().get(&quot;data&quot;) == ast.literal_eval(except_msg)<br/><span class="error">E       assert False == True</span><br/><span class="error">E         +False</span><br/><span class="error">E         -True</span><br/><br/>testcases\jin_yang_dev\test_jy_api_waste_water_factory_add_modify_delete.py:45: AssertionError<br/>------------------------------ Captured log call -------------------------------<br/>INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/wasteWater-factory/exist
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;name&quot;: &quot;西安市雁塔区污水处理厂重复&quot;,
+    &quot;pkid&quot;: &quot;43ae5a95-ff48-4291-9f4d-e69de122d33a&quot;
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;,&quot;data&quot;:false}</div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <th>
+        金阳项目-排水管信息列表及详情
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_list_detail_base_info.py::TestJinYangApi::test_get_drain_pipe_api[/udims/drain-pipe/attached-POST-None-None-{\n &quot;drainPipeCode&quot;: &quot;&quot;\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.37</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">self = &lt;AuotTest.ApiAuto.testcases.jin_yang_dev.test_jy_list_detail_base_info.TestJinYangApi object at 0x000001FC6A8DE460&gt;<br/>url_path = &#x27;/udims/drain-pipe/attached&#x27;, request_method = &#x27;POST&#x27;, headers = None<br/>params = None, json = &#x27;{\n &quot;drainPipeCode&quot;: &quot;&quot;\n}&#x27;, data = None<br/>except_code = 200, except_msg = &#x27;成功&#x27;<br/><br/>    @pytest.mark.parametrize(&quot;url_path, request_method, headers, params, json, data, except_code, except_msg&quot;,<br/>                             get_excel_data(&quot;jin_yang_dev.xlsx&quot;, &quot;排水管管理&quot;))<br/>    def test_get_drain_pipe_api(self, url_path, request_method, headers, params, json, data, except_code, except_msg):<br/>        &quot;&quot;&quot;<br/>        金阳项目-排水管信息列表及详情<br/>        &quot;&quot;&quot;<br/>    <br/>        logger.info(&quot;*************** 开始执行用例 ***************&quot;)<br/>&gt;       result = get_drain_pipe_baseinfo(url_path, request_method, headers, params, json, data)<br/><br/>testcases\jin_yang_dev\test_jy_list_detail_base_info.py:17: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>url = &#x27;/udims/drain-pipe/attached&#x27;, method = &#x27;POST&#x27;, headers = None<br/>params = None, json_data = {&#x27;drainPipeCode&#x27;: &#x27;&#x27;}, excel_data = None<br/><br/>    def get_drain_pipe_baseinfo(url, method, headers, params, json_data, excel_data):<br/>        &quot;&quot;&quot;<br/>    <br/>           :param code: 排水管编号<br/>           :return:<br/>           &quot;&quot;&quot;<br/>    <br/>        result = ResultBase<br/>        json_data = json.loads(json_data)<br/>        response = JinYang.jin_yang_dev(url, method, headers, params, json_data, excel_data)<br/>        result.success = False<br/>&gt;       if response.json()[&quot;code&quot;] == 200:<br/><span class="error">E       KeyError: &#x27;code&#x27;</span><br/><br/>lib\operation\jin_yang_dev.py:38: KeyError<br/>------------------------------ Captured log call -------------------------------<br/>INFO     log:test_jy_list_detail_base_info.py:16 *************** 开始执行用例 ***************
+INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/drain-pipe/attached
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;drainPipeCode&quot;: &quot;&quot;
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null</div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <th>
+        金阳项目-检查井管理列表及详情
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_list_detail_base_info.py::TestJinYangApi::test_get_inspection_well_api[/udims/inspection-well/attached-data-POST-None-None-{\n &quot;dataType&quot;: 0,\n &quot;itemCode&quot;: &quot;&quot;\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.09</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">self = &lt;AuotTest.ApiAuto.testcases.jin_yang_dev.test_jy_list_detail_base_info.TestJinYangApi object at 0x000001FC6A8DE130&gt;<br/>url_path = &#x27;/udims/inspection-well/attached-data&#x27;, request_method = &#x27;POST&#x27;<br/>headers = None, params = None, json = &#x27;{\n &quot;dataType&quot;: 0,\n &quot;itemCode&quot;: &quot;&quot;\n}&#x27;<br/>data = None, except_code = 200, except_msg = &#x27;成功&#x27;<br/><br/>    @pytest.mark.parametrize(&quot;url_path, request_method, headers, params, json, data, except_code, except_msg&quot;,<br/>                             get_excel_data(&quot;jin_yang_dev.xlsx&quot;, &quot;检查井管理&quot;))<br/>    def test_get_inspection_well_api(self, url_path, request_method, headers, params, json, data, except_code,<br/>                                     except_msg):<br/>        &quot;&quot;&quot;<br/>        金阳项目-检查井管理列表及详情<br/>        &quot;&quot;&quot;<br/>    <br/>        logger.info(&quot;*************** 开始执行用例 ***************&quot;)<br/>&gt;       result = get_drain_pipe_baseinfo(url_path, request_method, headers, params, json, data)<br/><br/>testcases\jin_yang_dev\test_jy_list_detail_base_info.py:35: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>url = &#x27;/udims/inspection-well/attached-data&#x27;, method = &#x27;POST&#x27;, headers = None<br/>params = None, json_data = {&#x27;dataType&#x27;: 0, &#x27;itemCode&#x27;: &#x27;&#x27;}, excel_data = None<br/><br/>    def get_drain_pipe_baseinfo(url, method, headers, params, json_data, excel_data):<br/>        &quot;&quot;&quot;<br/>    <br/>           :param code: 排水管编号<br/>           :return:<br/>           &quot;&quot;&quot;<br/>    <br/>        result = ResultBase<br/>        json_data = json.loads(json_data)<br/>        response = JinYang.jin_yang_dev(url, method, headers, params, json_data, excel_data)<br/>        result.success = False<br/>&gt;       if response.json()[&quot;code&quot;] == 200:<br/><span class="error">E       KeyError: &#x27;code&#x27;</span><br/><br/>lib\operation\jin_yang_dev.py:38: KeyError<br/>------------------------------ Captured log call -------------------------------<br/>INFO     log:test_jy_list_detail_base_info.py:34 *************** 开始执行用例 ***************
+INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/inspection-well/attached-data
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;dataType&quot;: 0,
+    &quot;itemCode&quot;: &quot;&quot;
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null</div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <th>
+        金阳项目-检查井管理列表及详情
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_list_detail_base_info.py::TestJinYangApi::test_get_inspection_well_api[/udims/inspection-well/survey-POST-None-None-{\n &quot;dataType&quot;: 1,\n &quot;itemCode&quot;: &quot;PY10&quot;\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.09</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">self = &lt;AuotTest.ApiAuto.testcases.jin_yang_dev.test_jy_list_detail_base_info.TestJinYangApi object at 0x000001FC6A8D70D0&gt;<br/>url_path = &#x27;/udims/inspection-well/survey&#x27;, request_method = &#x27;POST&#x27;<br/>headers = None, params = None<br/>json = &#x27;{\n &quot;dataType&quot;: 1,\n &quot;itemCode&quot;: &quot;PY10&quot;\n}&#x27;, data = None<br/>except_code = 200, except_msg = &#x27;成功&#x27;<br/><br/>    @pytest.mark.parametrize(&quot;url_path, request_method, headers, params, json, data, except_code, except_msg&quot;,<br/>                             get_excel_data(&quot;jin_yang_dev.xlsx&quot;, &quot;检查井管理&quot;))<br/>    def test_get_inspection_well_api(self, url_path, request_method, headers, params, json, data, except_code,<br/>                                     except_msg):<br/>        &quot;&quot;&quot;<br/>        金阳项目-检查井管理列表及详情<br/>        &quot;&quot;&quot;<br/>    <br/>        logger.info(&quot;*************** 开始执行用例 ***************&quot;)<br/>&gt;       result = get_drain_pipe_baseinfo(url_path, request_method, headers, params, json, data)<br/><br/>testcases\jin_yang_dev\test_jy_list_detail_base_info.py:35: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>url = &#x27;/udims/inspection-well/survey&#x27;, method = &#x27;POST&#x27;, headers = None<br/>params = None, json_data = {&#x27;dataType&#x27;: 1, &#x27;itemCode&#x27;: &#x27;PY10&#x27;}<br/>excel_data = None<br/><br/>    def get_drain_pipe_baseinfo(url, method, headers, params, json_data, excel_data):<br/>        &quot;&quot;&quot;<br/>    <br/>           :param code: 排水管编号<br/>           :return:<br/>           &quot;&quot;&quot;<br/>    <br/>        result = ResultBase<br/>        json_data = json.loads(json_data)<br/>        response = JinYang.jin_yang_dev(url, method, headers, params, json_data, excel_data)<br/>        result.success = False<br/>&gt;       if response.json()[&quot;code&quot;] == 200:<br/><span class="error">E       KeyError: &#x27;code&#x27;</span><br/><br/>lib\operation\jin_yang_dev.py:38: KeyError<br/>------------------------------ Captured log call -------------------------------<br/>INFO     log:test_jy_list_detail_base_info.py:34 *************** 开始执行用例 ***************
+INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/inspection-well/survey
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;dataType&quot;: 1,
+    &quot;itemCode&quot;: &quot;PY10&quot;
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null</div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <th>
+        金阳项目-监测点管理列表及详情
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_list_detail_base_info.py::TestJinYangApi::test_monitor_point_info_api[/udims/monitor-point/detail-POST-None-None-{\n &quot;pointCode&quot;: &quot;0604009643900023&quot;\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.11</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">self = &lt;AuotTest.ApiAuto.testcases.jin_yang_dev.test_jy_list_detail_base_info.TestJinYangApi object at 0x000001FC6A8E07C0&gt;<br/>url_path = &#x27;/udims/monitor-point/detail&#x27;, request_method = &#x27;POST&#x27;<br/>headers = None, params = None, json = &#x27;{\n &quot;pointCode&quot;: &quot;0604009643900023&quot;\n}&#x27;<br/>data = None, except_code = 200, except_msg = &#x27;成功&#x27;<br/><br/>    @pytest.mark.parametrize(&quot;url_path, request_method, headers, params, json, data, except_code, except_msg&quot;,<br/>                             get_excel_data(&quot;jin_yang_dev.xlsx&quot;, &quot;监测点管理&quot;))<br/>    def test_monitor_point_info_api(self, url_path, request_method, headers, params, json, data, except_code,<br/>                              except_msg):<br/>        &quot;&quot;&quot;<br/>        金阳项目-监测点管理列表及详情<br/>        &quot;&quot;&quot;<br/>    <br/>        logger.info(&quot;*************** 开始执行用例 ***************&quot;)<br/>        result = get_drain_pipe_baseinfo(url_path, request_method, headers, params, json, data)<br/>&gt;       assert_that(result.json().get(&quot;code&quot;), equal_to(except_code))<br/><span class="error">E       AssertionError: </span><br/><span class="error">E       Expected: &lt;200&gt;</span><br/><span class="error">E            but: was &lt;30001&gt;</span><br/><br/>testcases\jin_yang_dev\test_jy_list_detail_base_info.py:126: AssertionError<br/>------------------------------ Captured log call -------------------------------<br/>INFO     log:test_jy_list_detail_base_info.py:124 *************** 开始执行用例 ***************
+INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/monitor-point/detail
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;pointCode&quot;: &quot;0604009643900023&quot;
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:30001,&quot;msg&quot;:&quot;监测点pkid&quot;}</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-新增排水户信息
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_api_drainage_add_modify_delete.py::TestJinYangApiCreateModifyDelete::test_add_drainage_api[/udims/drainage/company/add-company-POST-None-None-{\n &quot;address&quot;: &quot;\u81ea\u52a8\u5316\u6d4b\u8bd5\u65b0\u589e&quot;,\n &quot;dataSourceName&quot;: &quot;\u7ae3\u5de5\u56fe&quot;,\n &quot;dataSourceType&quot;: 2,\n &quot;drainageName&quot;: &quot;\u6392\u6c34\u6237\u65b0\u589e\u6d4b\u8bd5005&quot;,\n &quot;drainageType&quot;: &quot;\u6d4b\u8bd5\u7c7b\u578b&quot;,\n &quot;effectiveTime&quot;: &quot;2021-08-14&quot;,\n &quot;fillPersonId&quot;: &quot;001&quot;,\n &quot;fillPersonName&quot;: &quot;\u5f20\u4e09&quot;,\n &quot;fillTime&quot;: &quot;2021-08-14&quot;,\n &quot;firstPolluteName&quot;: &quot;1\u53f7\u6c61\u67d3\u7269&quot;,\n &quot;imageIds&quot;: &quot;/123/456.jpg&quot;,\n &quot;isKeyPoint&quot;: 0,\n &quot;legalRepresentative&quot;: &quot;\u738b\u8001\u677f&quot;,\n &quot;lgtd&quot;: 11.11,\n &quot;licenceCode&quot;: &quot;123456&quot;,\n &quot;livePolluteWater&quot;: 123.321,\n &quot;lttd&quot;:22.22,\n &quot;mainProcess&quot;: &quot;\u6d4b\u8bd5\u4e3b\u8981\u5de5\u827a\u6d41\u7a0b&quot;,\n &quot;operator&quot;: &quot;\u5c0f\u738b&quot;,\n &quot;operatorTel&quot;: &quot;15112333321&quot;,\n &quot;owenership&quot;: &quot;\u6743\u5c5e\u5355\u4f4d001&quot;,\n &quot;phoneNumber&quot;: &quot;13888766788&quot;,\n &quot;productionPolluteWater&quot;: 11.22,\n &quot;psName&quot;: &quot;\u5f20\u6c0f\u96c6\u56e2&quot;,\n &quot;regionCode&quot;: &quot;001100&quot;,\n &quot;regionName&quot;: &quot;\u5357\u5c71&quot;,\n &quot;releaseTime&quot;: &quot;2021-08-14&quot;,\n &quot;remark&quot;: &quot;\u6d4b\u8bd5\u5907\u6ce8&quot;,\n &quot;secondPolluteName&quot;: &quot;2\u53f7\u6c61\u67d3\u7269&quot;,\n &quot;selfPrepareWater&quot;: 11.22,\n &quot;solveMethod&quot;: &quot;\u6d4b\u8bd5\u5904\u7406\u65b9\u6cd5&quot;,\n &quot;solveQuantity&quot;: 33.44,\n &quot;status&quot;: 1,\n &quot;streetCode&quot;: &quot;100001&quot;,\n &quot;streetName&quot;: &quot;\u524d\u8fdb\u8def&quot;,\n &quot;tapWater&quot;: 33.44,\n &quot;totalDischargeWater&quot;: 44.55,\n &quot;totalWater&quot;: 55.66,\n &quot;uscCode&quot;: &quot;001111000&quot;\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.57</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:test_jy_api_drainage_add_modify_delete.py:20 *************** 开始执行用例 ***************
+INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/drainage/company/add-company
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;address&quot;: &quot;自动化测试新增&quot;,
+    &quot;dataSourceName&quot;: &quot;竣工图&quot;,
+    &quot;dataSourceType&quot;: 2,
+    &quot;drainageName&quot;: &quot;排水户新增测试005&quot;,
+    &quot;drainageType&quot;: &quot;测试类型&quot;,
+    &quot;effectiveTime&quot;: &quot;2021-08-14&quot;,
+    &quot;fillPersonId&quot;: &quot;001&quot;,
+    &quot;fillPersonName&quot;: &quot;张三&quot;,
+    &quot;fillTime&quot;: &quot;2021-08-14&quot;,
+    &quot;firstPolluteName&quot;: &quot;1号污染物&quot;,
+    &quot;imageIds&quot;: &quot;/123/456.jpg&quot;,
+    &quot;isKeyPoint&quot;: 0,
+    &quot;legalRepresentative&quot;: &quot;王老板&quot;,
+    &quot;lgtd&quot;: 11.11,
+    &quot;licenceCode&quot;: &quot;123456&quot;,
+    &quot;livePolluteWater&quot;: 123.321,
+    &quot;lttd&quot;: 22.22,
+    &quot;mainProcess&quot;: &quot;测试主要工艺流程&quot;,
+    &quot;operator&quot;: &quot;小王&quot;,
+    &quot;operatorTel&quot;: &quot;15112333321&quot;,
+    &quot;owenership&quot;: &quot;权属单位001&quot;,
+    &quot;phoneNumber&quot;: &quot;13888766788&quot;,
+    &quot;productionPolluteWater&quot;: 11.22,
+    &quot;psName&quot;: &quot;张氏集团&quot;,
+    &quot;regionCode&quot;: &quot;001100&quot;,
+    &quot;regionName&quot;: &quot;南山&quot;,
+    &quot;releaseTime&quot;: &quot;2021-08-14&quot;,
+    &quot;remark&quot;: &quot;测试备注&quot;,
+    &quot;secondPolluteName&quot;: &quot;2号污染物&quot;,
+    &quot;selfPrepareWater&quot;: 11.22,
+    &quot;solveMethod&quot;: &quot;测试处理方法&quot;,
+    &quot;solveQuantity&quot;: 33.44,
+    &quot;status&quot;: 1,
+    &quot;streetCode&quot;: &quot;100001&quot;,
+    &quot;streetName&quot;: &quot;前进路&quot;,
+    &quot;tapWater&quot;: 33.44,
+    &quot;totalDischargeWater&quot;: 44.55,
+    &quot;totalWater&quot;: 55.66,
+    &quot;uscCode&quot;: &quot;001111000&quot;
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;,&quot;data&quot;:{&quot;pkid&quot;:&quot;e4c96708-5ec2-4c48-b519-66377a6dacf5&quot;}}
+INFO     log:test_jy_api_drainage_add_modify_delete.py:25 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_api_drainage_add_modify_delete.py:27 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-新增智能井盖信息
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_api_inspection_well_add_modify_delete.py::TestJinYangApiCreateModifyDelete::test_add_inspection_well_api[/udims/intelligent/well-lid/add-well-lid-POST-None-None-{\n &quot;address&quot;: &quot;\u5b9d\u5b89\u533a&quot;,\n &quot;buildTime&quot;: &quot;2021-08-14&quot;,\n &quot;dataSourceName&quot;: &quot;\u8bbe\u8ba1\u56fe&quot;,\n &quot;dataSourceType&quot;: 3,\n &quot;diameter&quot;: 1.23,\n &quot;fillPersonId&quot;: &quot;001&quot;,\n &quot;fillPersonName&quot;: &quot;\u5f20\u4e09&quot;,\n &quot;fillTime&quot;: &quot;2021-08-14&quot;,\n &quot;imageIds&quot;: &quot;aa/bb/cc,cc/dd/dd&quot;,\n &quot;inspectionWellCode&quot;: &quot;wellCode001&quot;,\n &quot;inspectionWellName&quot;: &quot;\u81ea\u52a8\u5316\u6d4b\u8bd5\u65b0\u589e\u6d4b\u8bd5&quot;,\n &quot;length&quot;: 1.11,\n &quot;lgtd&quot;: 11.44,\n &quot;lttd&quot;: 11.33,\n &quot;material&quot;: 1,\n &quot;ownership&quot;: &quot;\u738b\u8001\u677f&quot;,\n &quot;pkid&quot;: null,\n &quot;regionCode&quot;: &quot;1001&quot;,\n &quot;regionName&quot;: &quot;\u5b9d\u5b89\u533a&quot;,\n &quot;remark&quot;: &quot;\u667a\u80fd\u4e95\u76d601&quot;,\n &quot;shape&quot;: 1,\n &quot;sideOneLength&quot;: 1.11,\n &quot;sideThreeLength&quot;: 3.33,\n &quot;sideTwoLength&quot;: 4.5,\n &quot;status&quot;: 1,\n &quot;streetCode&quot;: &quot;001&quot;,\n &quot;streetName&quot;: &quot;\u534e\u5f3a\u8def&quot;,\n &quot;thickness&quot;: 3.21,\n &quot;wellLidCode&quot;: null,\n &quot;wellLidName&quot;: &quot;\u81ea\u52a8\u5316\u6d4b\u8bd5\u65b0\u589e\u6d4b\u8bd5001&quot;,\n &quot;width&quot;: 1.23\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.18</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:test_jy_api_inspection_well_add_modify_delete.py:20 *************** 开始执行用例 ***************
+INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/intelligent/well-lid/add-well-lid
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;address&quot;: &quot;宝安区&quot;,
+    &quot;buildTime&quot;: &quot;2021-08-14&quot;,
+    &quot;dataSourceName&quot;: &quot;设计图&quot;,
+    &quot;dataSourceType&quot;: 3,
+    &quot;diameter&quot;: 1.23,
+    &quot;fillPersonId&quot;: &quot;001&quot;,
+    &quot;fillPersonName&quot;: &quot;张三&quot;,
+    &quot;fillTime&quot;: &quot;2021-08-14&quot;,
+    &quot;imageIds&quot;: &quot;aa/bb/cc,cc/dd/dd&quot;,
+    &quot;inspectionWellCode&quot;: &quot;wellCode001&quot;,
+    &quot;inspectionWellName&quot;: &quot;自动化测试新增测试&quot;,
+    &quot;length&quot;: 1.11,
+    &quot;lgtd&quot;: 11.44,
+    &quot;lttd&quot;: 11.33,
+    &quot;material&quot;: 1,
+    &quot;ownership&quot;: &quot;王老板&quot;,
+    &quot;pkid&quot;: null,
+    &quot;regionCode&quot;: &quot;1001&quot;,
+    &quot;regionName&quot;: &quot;宝安区&quot;,
+    &quot;remark&quot;: &quot;智能井盖01&quot;,
+    &quot;shape&quot;: 1,
+    &quot;sideOneLength&quot;: 1.11,
+    &quot;sideThreeLength&quot;: 3.33,
+    &quot;sideTwoLength&quot;: 4.5,
+    &quot;status&quot;: 1,
+    &quot;streetCode&quot;: &quot;001&quot;,
+    &quot;streetName&quot;: &quot;华强路&quot;,
+    &quot;thickness&quot;: 3.21,
+    &quot;wellLidCode&quot;: null,
+    &quot;wellLidName&quot;: &quot;自动化测试新增测试001&quot;,
+    &quot;width&quot;: 1.23
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;,&quot;data&quot;:{&quot;pkid&quot;:&quot;a7c6eaef-79a3-4448-a2fa-91b606b16ea3&quot;}}
+INFO     log:test_jy_api_inspection_well_add_modify_delete.py:25 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_api_inspection_well_add_modify_delete.py:27 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-排水户管理-唯一性校验
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_api_drainage_add_modify_delete.py::TestJinYangApiCreateModifyDelete::test_verify_unique_pkid[/udims/drainage/company/name-exist-POST-None-None-{\n &quot;drainageName&quot;: &quot;\u6392\u6c34\u6237\u65b0\u589e\u6d4b\u8bd5005&quot;\n}-None-200-True]</td>
+          <td class="col-duration">0.09</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/drainage/company/name-exist
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;drainageName&quot;: &quot;排水户新增测试005&quot;
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;,&quot;data&quot;:true}
+INFO     log:test_jy_api_drainage_add_modify_delete.py:44 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_api_drainage_add_modify_delete.py:45 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-排水户管理-唯一性校验
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_api_drainage_add_modify_delete.py::TestJinYangApiCreateModifyDelete::test_verify_unique_pkid[/udims/drainage/company/name-exist-POST-None-None-{\n &quot;drainageName&quot;: &quot;\u81ea\u52a8\u5316\u6d4b\u8bd5\u4e0d\u91cd\u590d&quot;\n}-None-200-False]</td>
+          <td class="col-duration">0.09</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/drainage/company/name-exist
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;drainageName&quot;: &quot;自动化测试不重复&quot;
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;,&quot;data&quot;:false}
+INFO     log:test_jy_api_drainage_add_modify_delete.py:44 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_api_drainage_add_modify_delete.py:45 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-智能井盖管理-唯一性校验
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_api_inspection_well_add_modify_delete.py::TestJinYangApiCreateModifyDelete::test_verify_unique_pkid[/udims/intelligent/well-lid/name-exist-POST-None-None-{\n &quot;wellLidName&quot;: &quot;\u81ea\u52a8\u5316\u6d4b\u8bd5\u65b0\u589e\u6d4b\u8bd5001&quot;\n}-None-200-True]</td>
+          <td class="col-duration">0.09</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/intelligent/well-lid/name-exist
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;wellLidName&quot;: &quot;自动化测试新增测试001&quot;
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;,&quot;data&quot;:true}
+INFO     log:test_jy_api_inspection_well_add_modify_delete.py:44 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_api_inspection_well_add_modify_delete.py:45 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-智能井盖管理-唯一性校验
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_api_inspection_well_add_modify_delete.py::TestJinYangApiCreateModifyDelete::test_verify_unique_pkid[/udims/intelligent/well-lid/name-exist-POST-None-None-{\n &quot;wellLidName&quot;: &quot;\u81ea\u52a8\u5316\u6d4b\u8bd5\u4e0d\u91cd\u590d&quot;\n}-None-200-False]</td>
+          <td class="col-duration">0.09</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/intelligent/well-lid/name-exist
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;wellLidName&quot;: &quot;自动化测试不重复&quot;
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;,&quot;data&quot;:false}
+INFO     log:test_jy_api_inspection_well_add_modify_delete.py:44 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_api_inspection_well_add_modify_delete.py:45 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-排水户管理-排水户泵站信息
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_api_drainage_add_modify_delete.py::TestJinYangApiCreateModifyDelete::test_modify_drainage_api[/udims/drainage/company/update-company-POST-None-None-{\n &quot;address&quot;: &quot;\u81ea\u52a8\u5316\u6d4b\u8bd5\u4fee\u6539&quot;,\n &quot;attachmentList&quot;: [\n  {\n   &quot;contentDescription&quot;: &quot;\u6d4b\u8bd5\u63cf\u8ff0&quot;,\n   &quot;entryTime&quot;: &quot;2021-08-14&quot;,\n   &quot;fileIdentiful&quot;: &quot;aa/bb/cc.jpg&quot;,\n   &quot;id&quot;: null,\n   &quot;orderNum&quot;: null,\n   &quot;remark&quot;: &quot;\u6d4b\u8bd5\u5907\u6ce8&quot;,\n   &quot;resourceName&quot;: &quot;\u6392\u6c34\u6237\u9644\u4ef6001&quot;,\n   &quot;updateUserId&quot;: &quot;001&quot;,\n   &quot;updateUserName&quot;: &quot;\u5f20\u4e09&quot;,\n   &quot;uploadUserId&quot;: &quot;002&quot;,\n   &quot;uploadUserName&quot;: &quot;\u674e\u56db&quot;\n  }\n ],\n &quot;dataSourceName&quot;: &quot;\u7ae3\u5de5\u56fe&quot;,\n &quot;dataSourceType&quot;: 2,\n &quot;delAttachmentPkids&quot;: [],\n &quot;delEquipmentPkids&quot;: [],\n &quot;delOutfallPkis&quot;: [],\n &quot;drainageCode&quot;: null,\n &quot;drainageName&quot;: &quot;\u6392\u6c34\u6237\u65b0\u589e\u6d4b\u8bd5005&quot;,\n &quot;drainageType&quot;: &quot;\u6d4b\u8bd5\u7c7b\u578b&quot;,\n &quot;effectiveTime&quot;: &quot;2021-08-14&quot;,\n &quot;fillPersonId&quot;: &quot;001&quot;,\n &quot;fillPersonName&quot;: &quot;\u5f20\u4e09&quot;,\n &quot;fillTime&quot;: &quot;2021-08-14&quot;,\n &quot;firstPolluteName&quot;: &quot;1\u53f7\u6c61\u67d3\u7269&quot;,\n &quot;imageIds&quot;: &quot;/123/456.jpg&quot;,\n &quot;isKeyPoint&quot;: 0,\n &quot;legalRepresentative&quot;: &quot;\u738b\u8001\u677f&quot;,\n &quot;lgtd&quot;: 11.11,\n &quot;licenceCode&quot;: &quot;123456&quot;,\n &quot;livePolluteWater&quot;: 123.321,\n &quot;lttd&quot;:22.22,\n &quot;mainProcess&quot;: &quot;\u6d4b\u8bd5\u4e3b\u8981\u5de5\u827a\u6d41\u7a0b&quot;,\n &quot;moniEquipmentList&quot;: [\n  {\n   &quot;buildTime&quot;: &quot;2021-08-14&quot;,\n   &quot;monitorItem&quot;: &quot;\u6c34\u8d28\uff0c\u6d41\u91cf&quot;,\n   &quot;pkid&quot;: 31,\n   &quot;pointCode&quot;: &quot;point001&quot;,\n   &quot;pointName&quot;: &quot;1\u53f7\u76d1\u6d4b\u70b9&quot;,\n   &quot;sort&quot;: null,\n   &quot;transferType&quot;: 0,\n   &quot;transferTypeName&quot;: null\n  },\n  {\n   &quot;buildTime&quot;: &quot;2021-08-14&quot;,\n   &quot;monitorItem&quot;: &quot;\u6c34\u8d28&quot;,\n   &quot;pkid&quot;: null,\n   &quot;pointCode&quot;: &quot;point002&quot;,\n   &quot;pointName&quot;: &quot;2\u53f7\u76d1\u6d4b\u70b9&quot;,\n   &quot;sort&quot;: null,\n   &quot;transferType&quot;: 1,\n   &quot;transferTypeName&quot;: null\n  }\n ],\n &quot;operator&quot;: &quot;\u5c0f\u738b&quot;,\n &quot;operatorTel&quot;: &quot;15112333321&quot;,\n &quot;outfallInfoList&quot;: [\n  {\n   &quot;address&quot;: &quot;\u6df1\u5733&quot;,\n   &quot;dischargeWaterDirection&quot;: &quot;\u534e\u5f3a\u8def&quot;,\n   &quot;dischargeWaterQuantity&quot;: 123.321,\n   &quot;inspectionWellCode&quot;: &quot;well001&quot;,\n   &quot;lgtd&quot;: 11.22,\n   &quot;lttd&quot;: 22.33,\n   &quot;outfallCode&quot;: null,\n   &quot;outfallType&quot;: 1,\n   &quot;pipeDiameter&quot;: 100,\n   &quot;pkid&quot;: null,\n   &quot;sort&quot;: null\n  },\n  {\n   &quot;address&quot;: &quot;\u6df1\u5733&quot;,\n   &quot;dischargeWaterDirection&quot;: &quot;\u5357\u5c71\u8def&quot;,\n   &quot;dischargeWaterQuantity&quot;: 123.321,\n   &quot;inspectionWellCode&quot;: &quot;well002&quot;,\n   &quot;lgtd&quot;: 11.22,\n   &quot;lttd&quot;: 22.33,\n   &quot;outfallCode&quot;: null,\n   &quot;outfallType&quot;: 1,\n   &quot;pipeDiameter&quot;: 20,\n   &quot;pkid&quot;: null,\n   &quot;sort&quot;: null\n  }\n ],\n &quot;owenership&quot;: &quot;\u6743\u5c5e\u5355\u4f4d001&quot;,\n &quot;phoneNumber&quot;: &quot;13888766788&quot;,\n &quot;pkid&quot;: 31,\n &quot;productionPolluteWater&quot;: 11.22,\n &quot;psName&quot;: &quot;\u5f20\u6c0f\u96c6\u56e2&quot;,\n &quot;regionCode&quot;: &quot;001100&quot;,\n &quot;regionName&quot;: &quot;\u5357\u5c71&quot;,\n &quot;releaseTime&quot;: &quot;2021-08-14&quot;,\n &quot;remark&quot;: &quot;\u6d4b\u8bd5\u5907\u6ce8&quot;,\n &quot;secondPolluteName&quot;: &quot;2\u53f7\u6c61\u67d3\u7269&quot;,\n &quot;selfPrepareWater&quot;: 11.22,\n &quot;solveMethod&quot;: &quot;\u6d4b\u8bd5\u5904\u7406\u65b9\u6cd5&quot;,\n &quot;solveQuantity&quot;: 33.44,\n &quot;status&quot;: 1,\n &quot;streetCode&quot;: &quot;100001&quot;,\n &quot;streetName&quot;: &quot;\u524d\u8fdb\u8def&quot;,\n &quot;tapWater&quot;: 33.44,\n &quot;totalDischargeWater&quot;: 44.55,\n &quot;totalWater&quot;: 55.66,\n &quot;uscCode&quot;: &quot;001111000&quot;\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.19</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/drainage/company/update-company
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;address&quot;: &quot;自动化测试修改&quot;,
+    &quot;attachmentList&quot;: [
+        {
+            &quot;contentDescription&quot;: &quot;测试描述&quot;,
+            &quot;entryTime&quot;: &quot;2021-08-14&quot;,
+            &quot;fileIdentiful&quot;: &quot;aa/bb/cc.jpg&quot;,
+            &quot;id&quot;: null,
+            &quot;orderNum&quot;: null,
+            &quot;remark&quot;: &quot;测试备注&quot;,
+            &quot;resourceName&quot;: &quot;排水户附件001&quot;,
+            &quot;updateUserId&quot;: &quot;001&quot;,
+            &quot;updateUserName&quot;: &quot;张三&quot;,
+            &quot;uploadUserId&quot;: &quot;002&quot;,
+            &quot;uploadUserName&quot;: &quot;李四&quot;
+        }
+    ],
+    &quot;dataSourceName&quot;: &quot;竣工图&quot;,
+    &quot;dataSourceType&quot;: 2,
+    &quot;delAttachmentPkids&quot;: [],
+    &quot;delEquipmentPkids&quot;: [],
+    &quot;delOutfallPkis&quot;: [],
+    &quot;drainageCode&quot;: null,
+    &quot;drainageName&quot;: &quot;排水户新增测试005&quot;,
+    &quot;drainageType&quot;: &quot;测试类型&quot;,
+    &quot;effectiveTime&quot;: &quot;2021-08-14&quot;,
+    &quot;fillPersonId&quot;: &quot;001&quot;,
+    &quot;fillPersonName&quot;: &quot;张三&quot;,
+    &quot;fillTime&quot;: &quot;2021-08-14&quot;,
+    &quot;firstPolluteName&quot;: &quot;1号污染物&quot;,
+    &quot;imageIds&quot;: &quot;/123/456.jpg&quot;,
+    &quot;isKeyPoint&quot;: 0,
+    &quot;legalRepresentative&quot;: &quot;王老板&quot;,
+    &quot;lgtd&quot;: 11.11,
+    &quot;licenceCode&quot;: &quot;123456&quot;,
+    &quot;livePolluteWater&quot;: 123.321,
+    &quot;lttd&quot;: 22.22,
+    &quot;mainProcess&quot;: &quot;测试主要工艺流程&quot;,
+    &quot;moniEquipmentList&quot;: [
+        {
+            &quot;buildTime&quot;: &quot;2021-08-14&quot;,
+            &quot;monitorItem&quot;: &quot;水质，流量&quot;,
+            &quot;pkid&quot;: 31,
+            &quot;pointCode&quot;: &quot;point001&quot;,
+            &quot;pointName&quot;: &quot;1号监测点&quot;,
+            &quot;sort&quot;: null,
+            &quot;transferType&quot;: 0,
+            &quot;transferTypeName&quot;: null
+        },
+        {
+            &quot;buildTime&quot;: &quot;2021-08-14&quot;,
+            &quot;monitorItem&quot;: &quot;水质&quot;,
+            &quot;pkid&quot;: null,
+            &quot;pointCode&quot;: &quot;point002&quot;,
+            &quot;pointName&quot;: &quot;2号监测点&quot;,
+            &quot;sort&quot;: null,
+            &quot;transferType&quot;: 1,
+            &quot;transferTypeName&quot;: null
+        }
+    ],
+    &quot;operator&quot;: &quot;小王&quot;,
+    &quot;operatorTel&quot;: &quot;15112333321&quot;,
+    &quot;outfallInfoList&quot;: [
+        {
+            &quot;address&quot;: &quot;深圳&quot;,
+            &quot;dischargeWaterDirection&quot;: &quot;华强路&quot;,
+            &quot;dischargeWaterQuantity&quot;: 123.321,
+            &quot;inspectionWellCode&quot;: &quot;well001&quot;,
+            &quot;lgtd&quot;: 11.22,
+            &quot;lttd&quot;: 22.33,
+            &quot;outfallCode&quot;: null,
+            &quot;outfallType&quot;: 1,
+            &quot;pipeDiameter&quot;: 100,
+            &quot;pkid&quot;: null,
+            &quot;sort&quot;: null
+        },
+        {
+            &quot;address&quot;: &quot;深圳&quot;,
+            &quot;dischargeWaterDirection&quot;: &quot;南山路&quot;,
+            &quot;dischargeWaterQuantity&quot;: 123.321,
+            &quot;inspectionWellCode&quot;: &quot;well002&quot;,
+            &quot;lgtd&quot;: 11.22,
+            &quot;lttd&quot;: 22.33,
+            &quot;outfallCode&quot;: null,
+            &quot;outfallType&quot;: 1,
+            &quot;pipeDiameter&quot;: 20,
+            &quot;pkid&quot;: null,
+            &quot;sort&quot;: null
+        }
+    ],
+    &quot;owenership&quot;: &quot;权属单位001&quot;,
+    &quot;phoneNumber&quot;: &quot;13888766788&quot;,
+    &quot;pkid&quot;: &quot;e4c96708-5ec2-4c48-b519-66377a6dacf5&quot;,
+    &quot;productionPolluteWater&quot;: 11.22,
+    &quot;psName&quot;: &quot;张氏集团&quot;,
+    &quot;regionCode&quot;: &quot;001100&quot;,
+    &quot;regionName&quot;: &quot;南山&quot;,
+    &quot;releaseTime&quot;: &quot;2021-08-14&quot;,
+    &quot;remark&quot;: &quot;测试备注&quot;,
+    &quot;secondPolluteName&quot;: &quot;2号污染物&quot;,
+    &quot;selfPrepareWater&quot;: 11.22,
+    &quot;solveMethod&quot;: &quot;测试处理方法&quot;,
+    &quot;solveQuantity&quot;: 33.44,
+    &quot;status&quot;: 1,
+    &quot;streetCode&quot;: &quot;100001&quot;,
+    &quot;streetName&quot;: &quot;前进路&quot;,
+    &quot;tapWater&quot;: 33.44,
+    &quot;totalDischargeWater&quot;: 44.55,
+    &quot;totalWater&quot;: 55.66,
+    &quot;uscCode&quot;: &quot;001111000&quot;
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;}
+INFO     log:test_jy_api_drainage_add_modify_delete.py:64 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_api_drainage_add_modify_delete.py:66 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-智能井盖管理-修改泵站信息
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_api_inspection_well_add_modify_delete.py::TestJinYangApiCreateModifyDelete::test_modify_inspection_well_api[/udims/intelligent/well-lid/update-well-lid-POST-None-None-{\n &quot;address&quot;: &quot;\u5b9d\u5b89\u533a&quot;,\n &quot;attachmentList&quot;: [\n  {\n   &quot;contentDescription&quot;: &quot;\u667a\u80fd\u4e95\u76d6\u9644\u4ef601&quot;,\n   &quot;entryTime&quot;: &quot;2021-08-14&quot;,\n   &quot;fileIdentiful&quot;: &quot;/aa/bb/cc.jpg&quot;,\n   &quot;id&quot;: null,\n   &quot;orderNum&quot;: null,\n   &quot;remark&quot;: &quot;\u667a\u80fd\u4e95\u76d6\u9644\u4ef601&quot;,\n   &quot;resourceName&quot;: &quot;\u667a\u80fd\u4e95\u76d6\u9644\u4ef601&quot;,\n   &quot;updateUserId&quot;: &quot;001&quot;,\n   &quot;updateUserName&quot;: &quot;\u5f20\u4e09&quot;,\n   &quot;uploadUserId&quot;: &quot;002&quot;,\n   &quot;uploadUserName&quot;: &quot;\u674e\u56db&quot;\n  }\n ],\n &quot;buildTime&quot;: &quot;2021-08-14&quot;,\n &quot;dataSourceName&quot;: &quot;\u8bbe\u8ba1\u56fe&quot;,\n &quot;dataSourceType&quot;: 3,\n &quot;delAttachmentPkids&quot;: [],\n &quot;delEquipmentPkids&quot;: [],\n &quot;diameter&quot;: 1.23,\n &quot;fillPersonId&quot;: &quot;001&quot;,\n &quot;fillPersonName&quot;: &quot;\u5f20\u4e09&quot;,\n &quot;fillTime&quot;: &quot;2021-08-14&quot;,\n &quot;imageIds&quot;: &quot;aa/bb/cc,cc/dd/dd&quot;,\n &quot;inspectionWellCode&quot;: &quot;wellCodeTest&quot;,\n &quot;inspectionWellName&quot;: &quot;\u81ea\u52a8\u5316\u6d4b\u8bd5\u65b0\u589e\u6d4b\u8bd5&quot;,\n &quot;length&quot;: 1.11,\n &quot;lgtd&quot;: 11.44,\n &quot;lttd&quot;: 11.33,\n &quot;material&quot;: 1,\n &quot;moniEquipmentList&quot;: [\n  {\n   &quot;buildTime&quot;: &quot;2021-08-14&quot;,\n   &quot;monitorItem&quot;: &quot;\u6c34\u8d28&quot;,\n   &quot;orderNum&quot;: null,\n   &quot;pkid&quot;: null,\n   &quot;pointCode&quot;: &quot;point003&quot;,\n   &quot;pointName&quot;: &quot;\u76d1\u6d4b\u70b91\u53f7&quot;,\n   &quot;sort&quot;: null,\n   &quot;transferType&quot;: 1,\n   &quot;transferTypeName&quot;: null\n  }\n ],\n &quot;ownership&quot;: &quot;\u738b\u8001\u677f&quot;,\n &quot;pkid&quot;: 10,\n &quot;regionCode&quot;: &quot;1001&quot;,\n &quot;regionName&quot;: &quot;\u5b9d\u5b89\u533a&quot;,\n &quot;remark&quot;: &quot;\u667a\u80fd\u4e95\u76d601&quot;,\n &quot;shape&quot;: 1,\n &quot;sideOneLength&quot;: 1.11,\n &quot;sideThreeLength&quot;: 3.33,\n &quot;sideTwoLength&quot;: 4.5,\n &quot;status&quot;: 1,\n &quot;streetCode&quot;: &quot;001&quot;,\n &quot;streetName&quot;: &quot;\u534e\u5f3a\u8def&quot;,\n &quot;thickness&quot;: 3.21,\n &quot;wellLidCode&quot;: null,\n &quot;wellLidName&quot;: &quot;\u81ea\u52a8\u5316\u6d4b\u8bd5\u65b0\u589e\u6d4b\u8bd5001&quot;,\n &quot;width&quot;: 1.23\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.11</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/intelligent/well-lid/update-well-lid
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;address&quot;: &quot;宝安区&quot;,
+    &quot;attachmentList&quot;: [
+        {
+            &quot;contentDescription&quot;: &quot;智能井盖附件01&quot;,
+            &quot;entryTime&quot;: &quot;2021-08-14&quot;,
+            &quot;fileIdentiful&quot;: &quot;/aa/bb/cc.jpg&quot;,
+            &quot;id&quot;: null,
+            &quot;orderNum&quot;: null,
+            &quot;remark&quot;: &quot;智能井盖附件01&quot;,
+            &quot;resourceName&quot;: &quot;智能井盖附件01&quot;,
+            &quot;updateUserId&quot;: &quot;001&quot;,
+            &quot;updateUserName&quot;: &quot;张三&quot;,
+            &quot;uploadUserId&quot;: &quot;002&quot;,
+            &quot;uploadUserName&quot;: &quot;李四&quot;
+        }
+    ],
+    &quot;buildTime&quot;: &quot;2021-08-14&quot;,
+    &quot;dataSourceName&quot;: &quot;设计图&quot;,
+    &quot;dataSourceType&quot;: 3,
+    &quot;delAttachmentPkids&quot;: [],
+    &quot;delEquipmentPkids&quot;: [],
+    &quot;diameter&quot;: 1.23,
+    &quot;fillPersonId&quot;: &quot;001&quot;,
+    &quot;fillPersonName&quot;: &quot;张三&quot;,
+    &quot;fillTime&quot;: &quot;2021-08-14&quot;,
+    &quot;imageIds&quot;: &quot;aa/bb/cc,cc/dd/dd&quot;,
+    &quot;inspectionWellCode&quot;: &quot;wellCodeTest&quot;,
+    &quot;inspectionWellName&quot;: &quot;自动化测试新增测试&quot;,
+    &quot;length&quot;: 1.11,
+    &quot;lgtd&quot;: 11.44,
+    &quot;lttd&quot;: 11.33,
+    &quot;material&quot;: 1,
+    &quot;moniEquipmentList&quot;: [
+        {
+            &quot;buildTime&quot;: &quot;2021-08-14&quot;,
+            &quot;monitorItem&quot;: &quot;水质&quot;,
+            &quot;orderNum&quot;: null,
+            &quot;pkid&quot;: null,
+            &quot;pointCode&quot;: &quot;point003&quot;,
+            &quot;pointName&quot;: &quot;监测点1号&quot;,
+            &quot;sort&quot;: null,
+            &quot;transferType&quot;: 1,
+            &quot;transferTypeName&quot;: null
+        }
+    ],
+    &quot;ownership&quot;: &quot;王老板&quot;,
+    &quot;pkid&quot;: &quot;a7c6eaef-79a3-4448-a2fa-91b606b16ea3&quot;,
+    &quot;regionCode&quot;: &quot;1001&quot;,
+    &quot;regionName&quot;: &quot;宝安区&quot;,
+    &quot;remark&quot;: &quot;智能井盖01&quot;,
+    &quot;shape&quot;: 1,
+    &quot;sideOneLength&quot;: 1.11,
+    &quot;sideThreeLength&quot;: 3.33,
+    &quot;sideTwoLength&quot;: 4.5,
+    &quot;status&quot;: 1,
+    &quot;streetCode&quot;: &quot;001&quot;,
+    &quot;streetName&quot;: &quot;华强路&quot;,
+    &quot;thickness&quot;: 3.21,
+    &quot;wellLidCode&quot;: null,
+    &quot;wellLidName&quot;: &quot;自动化测试新增测试001&quot;,
+    &quot;width&quot;: 1.23
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;}
+INFO     log:test_jy_api_inspection_well_add_modify_delete.py:64 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_api_inspection_well_add_modify_delete.py:66 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-排水户管理-删除排水户信息
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_api_drainage_add_modify_delete.py::TestJinYangApiCreateModifyDelete::test_delete_drainage_api[/udims/drainage/company/delete-company-POST-None-None-{\n &quot;pkid&quot;: 0,\n &quot;reason&quot;: &quot;\u63a5\u53e3\u81ea\u52a8\u5316\u6d4b\u8bd5\u5220\u9664&quot;\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.10</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/drainage/company/delete-company
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;pkid&quot;: &quot;e4c96708-5ec2-4c48-b519-66377a6dacf5&quot;,
+    &quot;reason&quot;: &quot;接口自动化测试删除&quot;
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;}
+INFO     log:test_jy_api_drainage_add_modify_delete.py:85 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_api_drainage_add_modify_delete.py:87 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-智能井盖管理-删除泵站信息
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_api_inspection_well_add_modify_delete.py::TestJinYangApiCreateModifyDelete::test_delete_inspection_well_api[/udims/intelligent/well-lid/delete-well-lid-POST-None-None-{\n &quot;pkid&quot;: 0,\n &quot;reason&quot;: &quot;\u63a5\u53e3\u81ea\u52a8\u5316\u6d4b\u8bd5\u5220\u9664&quot;\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.09</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/intelligent/well-lid/delete-well-lid
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;pkid&quot;: &quot;a7c6eaef-79a3-4448-a2fa-91b606b16ea3&quot;,
+    &quot;reason&quot;: &quot;接口自动化测试删除&quot;
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;}
+INFO     log:test_jy_api_inspection_well_add_modify_delete.py:85 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_api_inspection_well_add_modify_delete.py:87 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-新增监测点信息
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_api_monitor_point_add_modify_delete.py::TestJinYangApiCreateModifyDelete::test_add_monitor_point_api[/udims/monitor-point/add-POST-None-None-{\n &quot;buildTime&quot;: &quot;2020-11-01 23:59:59&quot;,\n &quot;detailedAddress&quot;: &quot;\u63a5\u53e3\u81ea\u52a8\u5316\u6d4b\u8bd5&quot;,\n &quot;facilityOfName&quot;: &quot;\u897f\u5b89\u5e02\u7682\u6cb3\u76d1\u6d4b\u70b9&quot;,\n &quot;fillUser&quot;: &quot;\u6bb5\u658c&quot;,\n &quot;flowMoniPipelineCode&quot;: &quot;123465&quot;,\n &quot;imageIds&quot;: &quot;/aa/nbb/cc&quot;,\n &quot;lgtd&quot;: 123.546,\n &quot;lttd&quot;: 758.22,\n &quot;moniDataType&quot;: &quot;3&quot;,\n &quot;moniDeviceModel&quot;: &quot;x666&quot;,\n &quot;moniDeviceName&quot;: &quot;\u76d1\u6d4b\u8bbe\u5907&quot;,\n &quot;moniFrequencySource&quot;: 20,\n &quot;moniWay&quot;: 1,\n &quot;ownershipUnits&quot;: &quot;\u897f\u5b89\u5e02\u9ad8\u65b0\u533a&quot;,\n &quot;peripheralDescription&quot;: &quot;\u76d1\u6d4b\u70b9\u5468\u8fb9\u60c5\u51b5&quot;,\n &quot;pointCode&quot;: &quot;1111&quot;,\n &quot;pointName&quot;: &quot;\u897f\u5b89\u5e02\u7682\u6cb3\u76d1\u6d4b\u70b9\u65b0\u589e\u6d4b\u8bd5&quot;,\n &quot;pointStatus&quot;: 1,\n &quot;remark&quot;: &quot;\u8fd9\u91cc\u662f\u5907\u6ce8&quot;,\n &quot;systemSource&quot;: &quot;1&quot;,\n &quot;systemSourceExtend&quot;: &quot;2&quot;,\n &quot;typeOfFacility&quot;: &quot;2&quot;,\n &quot;updateUser&quot;: &quot;\u63a5\u53e3\u81ea\u52a8\u5316\u6d4b\u8bd5&quot;\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.28</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:test_jy_api_monitor_point_add_modify_delete.py:19 *************** 开始执行用例 ***************
+INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/monitor-point/add
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;buildTime&quot;: &quot;2020-11-01 23:59:59&quot;,
+    &quot;detailedAddress&quot;: &quot;接口自动化测试&quot;,
+    &quot;facilityOfName&quot;: &quot;西安市皂河监测点&quot;,
+    &quot;fillUser&quot;: &quot;段斌&quot;,
+    &quot;flowMoniPipelineCode&quot;: &quot;123465&quot;,
+    &quot;imageIds&quot;: &quot;/aa/nbb/cc&quot;,
+    &quot;lgtd&quot;: 123.546,
+    &quot;lttd&quot;: 758.22,
+    &quot;moniDataType&quot;: &quot;3&quot;,
+    &quot;moniDeviceModel&quot;: &quot;x666&quot;,
+    &quot;moniDeviceName&quot;: &quot;监测设备&quot;,
+    &quot;moniFrequencySource&quot;: 20,
+    &quot;moniWay&quot;: 1,
+    &quot;ownershipUnits&quot;: &quot;西安市高新区&quot;,
+    &quot;peripheralDescription&quot;: &quot;监测点周边情况&quot;,
+    &quot;pointCode&quot;: &quot;1111&quot;,
+    &quot;pointName&quot;: &quot;西安市皂河监测点新增测试&quot;,
+    &quot;pointStatus&quot;: 1,
+    &quot;remark&quot;: &quot;这里是备注&quot;,
+    &quot;systemSource&quot;: &quot;1&quot;,
+    &quot;systemSourceExtend&quot;: &quot;2&quot;,
+    &quot;typeOfFacility&quot;: &quot;2&quot;,
+    &quot;updateUser&quot;: &quot;接口自动化测试&quot;
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;,&quot;data&quot;:{&quot;orderNum&quot;:null,&quot;pkid&quot;:&quot;c0af59a3-b764-49b8-9039-9ca7f9427c6a&quot;,&quot;code&quot;:&quot;0604009643900568&quot;,&quot;pointCode&quot;:&quot;0604009643900568&quot;,&quot;pointName&quot;:&quot;西安市皂河监测点新增测试&quot;,&quot;typeOfFacility&quot;:&quot;2&quot;,&quot;typeOfFacilityName&quot;:&quot;管线&quot;,&quot;facilityOfName&quot;:&quot;西安市皂河监测点&quot;,&quot;detailedAddress&quot;:&quot;接口自动化测试&quot;,&quot;moniDataType&quot;:&quot;3&quot;,&quot;moniDataTypeName&quot;:null,&quot;moniWay&quot;:1,&quot;moniWayName&quot;:&quot;人工&quot;,&quot;ownershipUnits&quot;:&quot;西安市高新区&quot;,&quot;pointStatus&quot;:1,&quot;pointStatusName&quot;:&quot;停用&quot;,&quot;buildTime&quot;:&quot;2020-11-01&quot;}}
+INFO     log:test_jy_api_monitor_point_add_modify_delete.py:24 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_api_monitor_point_add_modify_delete.py:26 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-监测点管理-唯一性校验
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_api_monitor_point_add_modify_delete.py::TestJinYangApiCreateModifyDelete::test_verify_unique_pkid[/udims/monitor-point/check-POST-None-None-{\n&quot;pkid&quot;: 27,\n &quot;pointName&quot;: &quot;\u897f\u5b89\u5e02\u7682\u6cb3\u76d1\u6d4b\u70b9\u4e0d\u91cd\u590d&quot;\n}-None-200-False]</td>
+          <td class="col-duration">0.09</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/monitor-point/check
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;pkid&quot;: &quot;c0af59a3-b764-49b8-9039-9ca7f9427c6a&quot;,
+    &quot;pointName&quot;: &quot;西安市皂河监测点不重复&quot;
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;,&quot;data&quot;:false}
+INFO     log:test_jy_api_monitor_point_add_modify_delete.py:48 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_api_monitor_point_add_modify_delete.py:49 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-监测点管理-修改监测点信息
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_api_monitor_point_add_modify_delete.py::TestJinYangApiCreateModifyDelete::test_modify_monitor_point_api[/udims/monitor-point/update-POST-None-None-{\n &quot;alarmRuleInfoList&quot;: [\n  {\n   &quot;armLevel&quot;: &quot;1&quot;,\n   &quot;id&quot;: 19,\n   &quot;multiConditionalRelation&quot;: &quot;1&quot;,\n   &quot;pointCode&quot;: &quot;12345678912345678912&quot;,\n   &quot;polluteCode&quot;: &quot;09jlkjljlk&quot;,\n   &quot;polluteName&quot;: &quot;cod&quot;,\n   &quot;thresholdValueConditionOne&quot;: 1,\n   &quot;thresholdValueConditionOneName&quot;: &quot;\u540d\u79f0&quot;,\n   &quot;thresholdValueConditionTwo&quot;: 2,\n   &quot;thresholdValueConditionTwoName&quot;: &quot;\u540d\u79f0&quot;,\n   &quot;thresholdValueOne&quot;: 123.432,\n   &quot;thresholdValueTwo&quot;: 123.432\n  }\n ],\n &quot;buildTime&quot;: &quot;2020-11-01 23:59:59&quot;,\n &quot;deleteAttachmentIds&quot;: [],\n &quot;deleteRuleIds&quot;: [],\n &quot;detailedAddress&quot;: &quot;\u63a5\u53e3\u81ea\u52a8\u5316\u6d4b\u8bd5&quot;,\n &quot;facilityOfName&quot;: &quot;\u897f\u5b89\u5e02\u7682\u6cb3\u76d1\u6d4b\u70b9&quot;,\n &quot;fillUser&quot;: &quot;\u6bb5\u658c&quot;,\n &quot;flowMoniPipelineCode&quot;: &quot;1&quot;,\n &quot;imageIds&quot;: &quot;/aa/nbb/cc&quot;,\n &quot;lgtd&quot;: 123.546,\n &quot;lttd&quot;: 758.22,\n &quot;moniDataType&quot;: &quot;3&quot;,\n &quot;moniDeviceModel&quot;: &quot;x666&quot;,\n&quot;moniDeviceName&quot;: &quot;\u76d1\u6d4b\u8bbe\u5907&quot;,\n &quot;moniFrequencySource&quot;: 20,\n &quot;moniWay&quot;: 1,\n &quot;ownershipUnits&quot;: &quot;\u897f\u5b89\u5e02\u9ad8\u65b0\u533a&quot;,\n &quot;peripheralDescription&quot;: &quot;\u76d1\u6d4b\u70b9\u5468\u8fb9\u60c5\u51b5&quot;,\n &quot;pointCode&quot;: &quot;0604009643900023&quot;,\n  &quot;pkid&quot;:27,\n &quot;pointName&quot;: &quot;\u897f\u5b89\u5e02\u7682\u6cb3\u76d1\u6d4b\u70b9\u65b0\u589e\u6d4b\u8bd5&quot;,\n &quot;pointStatus&quot;: 1,\n &quot;remark&quot;: &quot;\u8fd9\u91cc\u662f\u5907\u6ce8&quot;,\n &quot;resourceAttachmentInfoList&quot;: [\n  {\n   &quot;contentDescription&quot;: &quot;\u8fd9\u91cc\u662f\u5185\u5bb9\u63cf\u8ff0&quot;,\n   &quot;fileIdentiful&quot;: &quot;aa/bb/cc.jpg&quot;,\n   &quot;id&quot;: &quot;56&quot;,\n   &quot;objCode&quot;: &quot;24&quot;,\n   &quot;objType&quot;: &quot;1&quot;,\n   &quot;percentFile&quot;: &quot;&quot;,\n   &quot;remark&quot;: &quot;\u8fd9\u91cc\u662f\u5907\u6ce8&quot;,\n   &quot;resourceName&quot;: &quot;\u6392\u6c34\u6237\u9644\u4ef6001&quot;,\n   &quot;resourceType&quot;: &quot;jpg&quot;,\n   &quot;submitUser&quot;: &quot;\u6bb5\u658c&quot;,\n   &quot;updateUserId&quot;: &quot;\u6bb5\u658c&quot;,\n   &quot;updateUserName&quot;: &quot;\u6bb5\u658c&quot;,\n   &quot;uploadUser&quot;: &quot;\u6bb5\u658c&quot;,\n   &quot;uploadUserId&quot;: &quot;666&quot;,\n   &quot;uploadUserName&quot;: &quot;\u6bb5\u658c&quot;\n  }\n ],\n&quot;systemSource&quot;: &quot;1&quot;,\n &quot;systemSourceExtend&quot;: &quot;2&quot;,\n &quot;typeOfFacility&quot;: &quot;2&quot;,\n &quot;updateUser&quot;: &quot;\u63a5\u53e3\u81ea\u52a8\u5316\u6d4b\u8bd5&quot;\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.16</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/monitor-point/update
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;alarmRuleInfoList&quot;: [
+        {
+            &quot;armLevel&quot;: &quot;1&quot;,
+            &quot;id&quot;: 19,
+            &quot;multiConditionalRelation&quot;: &quot;1&quot;,
+            &quot;pointCode&quot;: &quot;12345678912345678912&quot;,
+            &quot;polluteCode&quot;: &quot;09jlkjljlk&quot;,
+            &quot;polluteName&quot;: &quot;cod&quot;,
+            &quot;thresholdValueConditionOne&quot;: 1,
+            &quot;thresholdValueConditionOneName&quot;: &quot;名称&quot;,
+            &quot;thresholdValueConditionTwo&quot;: 2,
+            &quot;thresholdValueConditionTwoName&quot;: &quot;名称&quot;,
+            &quot;thresholdValueOne&quot;: 123.432,
+            &quot;thresholdValueTwo&quot;: 123.432
+        }
+    ],
+    &quot;buildTime&quot;: &quot;2020-11-01 23:59:59&quot;,
+    &quot;deleteAttachmentIds&quot;: [],
+    &quot;deleteRuleIds&quot;: [],
+    &quot;detailedAddress&quot;: &quot;接口自动化测试&quot;,
+    &quot;facilityOfName&quot;: &quot;西安市皂河监测点&quot;,
+    &quot;fillUser&quot;: &quot;段斌&quot;,
+    &quot;flowMoniPipelineCode&quot;: &quot;1&quot;,
+    &quot;imageIds&quot;: &quot;/aa/nbb/cc&quot;,
+    &quot;lgtd&quot;: 123.546,
+    &quot;lttd&quot;: 758.22,
+    &quot;moniDataType&quot;: &quot;3&quot;,
+    &quot;moniDeviceModel&quot;: &quot;x666&quot;,
+    &quot;moniDeviceName&quot;: &quot;监测设备&quot;,
+    &quot;moniFrequencySource&quot;: 20,
+    &quot;moniWay&quot;: 1,
+    &quot;ownershipUnits&quot;: &quot;西安市高新区&quot;,
+    &quot;peripheralDescription&quot;: &quot;监测点周边情况&quot;,
+    &quot;pointCode&quot;: &quot;0604009643900023&quot;,
+    &quot;pkid&quot;: &quot;c0af59a3-b764-49b8-9039-9ca7f9427c6a&quot;,
+    &quot;pointName&quot;: &quot;西安市皂河监测点新增测试&quot;,
+    &quot;pointStatus&quot;: 1,
+    &quot;remark&quot;: &quot;这里是备注&quot;,
+    &quot;resourceAttachmentInfoList&quot;: [
+        {
+            &quot;contentDescription&quot;: &quot;这里是内容描述&quot;,
+            &quot;fileIdentiful&quot;: &quot;aa/bb/cc.jpg&quot;,
+            &quot;id&quot;: &quot;56&quot;,
+            &quot;objCode&quot;: &quot;24&quot;,
+            &quot;objType&quot;: &quot;1&quot;,
+            &quot;percentFile&quot;: &quot;&quot;,
+            &quot;remark&quot;: &quot;这里是备注&quot;,
+            &quot;resourceName&quot;: &quot;排水户附件001&quot;,
+            &quot;resourceType&quot;: &quot;jpg&quot;,
+            &quot;submitUser&quot;: &quot;段斌&quot;,
+            &quot;updateUserId&quot;: &quot;段斌&quot;,
+            &quot;updateUserName&quot;: &quot;段斌&quot;,
+            &quot;uploadUser&quot;: &quot;段斌&quot;,
+            &quot;uploadUserId&quot;: &quot;666&quot;,
+            &quot;uploadUserName&quot;: &quot;段斌&quot;
+        }
+    ],
+    &quot;systemSource&quot;: &quot;1&quot;,
+    &quot;systemSourceExtend&quot;: &quot;2&quot;,
+    &quot;typeOfFacility&quot;: &quot;2&quot;,
+    &quot;updateUser&quot;: &quot;接口自动化测试&quot;
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;,&quot;data&quot;:true}
+INFO     log:test_jy_api_monitor_point_add_modify_delete.py:67 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_api_monitor_point_add_modify_delete.py:69 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-监测点管理-删除监测点信息
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_api_monitor_point_add_modify_delete.py::TestJinYangApiCreateModifyDelete::test_delete_monitor_point_api[/udims/monitor-point/delete-POST-None-None-{\n &quot;pkid&quot;: 27,\n &quot;reason&quot;: &quot;\u63a5\u53e3\u81ea\u52a8\u5316\u6d4b\u8bd5\u5220\u9664&quot;\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.10</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/monitor-point/delete
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;pkid&quot;: &quot;c0af59a3-b764-49b8-9039-9ca7f9427c6a&quot;,
+    &quot;reason&quot;: &quot;接口自动化测试删除&quot;
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;,&quot;data&quot;:true}
+INFO     log:test_jy_api_monitor_point_add_modify_delete.py:87 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_api_monitor_point_add_modify_delete.py:89 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-新增泵站信息
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_api_pump_station_add_modify_delete.py::TestJinYangApiCreateModifyDelete::test_add_pump_station_api[/udims/pump-station/create-POST-None-None-{\n &quot;address&quot;: &quot;\u63a5\u53e3\u81ea\u52a8\u5316\u65b0\u589e&quot;,\n &quot;area&quot;: 200,\n &quot;backupPowerSupply&quot;: &quot;\u5907\u7528\u7535\u6e90&quot;,\n &quot;bopDes&quot;: &quot;\u8fd9\u91cc\u662f\u8f85\u52a9\u8bbe\u5907\u63cf\u8ff0&quot;,\n &quot;contactInfo&quot;: &quot;13806660888&quot;,\n &quot;dataSource&quot;: &quot;1&quot;,\n &quot;dataSourceNotes&quot;: &quot;\u6570\u636e\u6765\u6e90\u5907\u6ce8&quot;,\n &quot;desRainSize&quot;: 200,\n &quot;desWasteSize&quot;: 3000,\n &quot;fillDate&quot;: &quot;2020-03-03&quot;,\n &quot;fillUserName&quot;: &quot;\u5f20\u4e50&quot;,\n &quot;forebayDepth&quot;: 888,\n &quot;forebayLength&quot;: 666,\n &quot;forebayWidth&quot;: 333,\n &quot;imageIds&quot;: &quot;/aa/bb/cc&quot;,\n &quot;installedCapacity&quot;: 555,\n &quot;insumpDesignHeigth&quot;: 123,\n &quot;insumpMaxHeigth&quot;: 456,\n &quot;insumpMaxRunHeigth&quot;: 789,\n &quot;insumpMinRunHeigth&quot;: 912,\n &quot;lgtd&quot;: 123.123,\n &quot;lttd&quot;: 456.789,\n &quot;masterPowerSupply&quot;: &quot;\u4e3b\u4f9b\u7535\u6e90&quot;,\n &quot;outsumpDesignHeigth&quot;: 159,\n &quot;outsumpMaxRunHeigth&quot;: 753,\n &quot;outsumpMinRunHeigth&quot;: 563,\n &quot;ownerUnit&quot;: &quot;\u9655\u897f\u7701\u897f\u5b89\u5e02\u9ad8\u65b0\u533a&quot;,\n &quot;psCreateTime&quot;: &quot;2020-03-03&quot;,\n &quot;psName&quot;: &quot;\u9ad8\u65b0\u533a\u6cf5\u7ad9\u65b0\u589e\u6d4b\u8bd5&quot;,\n &quot;psStatus&quot;: &quot;1&quot;,\n &quot;psType&quot;: &quot;BZ_01&quot;,\n &quot;pumpNum&quot;: 50,\n &quot;realRainSize&quot;: 666,\n &quot;realWasteSize&quot;: 999,\n &quot;remark&quot;: &quot;\u8fd9\u91cc\u662f\u5176\u4ed6\u5907\u6ce8&quot;,\n &quot;serviceArea&quot;: 2000,\n &quot;serviceScope&quot;: &quot;\u8fd9\u91cc\u662f\u670d\u52a1\u8303\u56f4&quot;,\n &quot;stormRecurrent&quot;: 2\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.26</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:test_jy_api_pump_station_add_modify_delete.py:19 *************** 开始执行用例 ***************
+INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/pump-station/create
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;address&quot;: &quot;接口自动化新增&quot;,
+    &quot;area&quot;: 200,
+    &quot;backupPowerSupply&quot;: &quot;备用电源&quot;,
+    &quot;bopDes&quot;: &quot;这里是辅助设备描述&quot;,
+    &quot;contactInfo&quot;: &quot;13806660888&quot;,
+    &quot;dataSource&quot;: &quot;1&quot;,
+    &quot;dataSourceNotes&quot;: &quot;数据来源备注&quot;,
+    &quot;desRainSize&quot;: 200,
+    &quot;desWasteSize&quot;: 3000,
+    &quot;fillDate&quot;: &quot;2020-03-03&quot;,
+    &quot;fillUserName&quot;: &quot;张乐&quot;,
+    &quot;forebayDepth&quot;: 888,
+    &quot;forebayLength&quot;: 666,
+    &quot;forebayWidth&quot;: 333,
+    &quot;imageIds&quot;: &quot;/aa/bb/cc&quot;,
+    &quot;installedCapacity&quot;: 555,
+    &quot;insumpDesignHeigth&quot;: 123,
+    &quot;insumpMaxHeigth&quot;: 456,
+    &quot;insumpMaxRunHeigth&quot;: 789,
+    &quot;insumpMinRunHeigth&quot;: 912,
+    &quot;lgtd&quot;: 123.123,
+    &quot;lttd&quot;: 456.789,
+    &quot;masterPowerSupply&quot;: &quot;主供电源&quot;,
+    &quot;outsumpDesignHeigth&quot;: 159,
+    &quot;outsumpMaxRunHeigth&quot;: 753,
+    &quot;outsumpMinRunHeigth&quot;: 563,
+    &quot;ownerUnit&quot;: &quot;陕西省西安市高新区&quot;,
+    &quot;psCreateTime&quot;: &quot;2020-03-03&quot;,
+    &quot;psName&quot;: &quot;高新区泵站新增测试&quot;,
+    &quot;psStatus&quot;: &quot;1&quot;,
+    &quot;psType&quot;: &quot;BZ_01&quot;,
+    &quot;pumpNum&quot;: 50,
+    &quot;realRainSize&quot;: 666,
+    &quot;realWasteSize&quot;: 999,
+    &quot;remark&quot;: &quot;这里是其他备注&quot;,
+    &quot;serviceArea&quot;: 2000,
+    &quot;serviceScope&quot;: &quot;这里是服务范围&quot;,
+    &quot;stormRecurrent&quot;: 2
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;,&quot;data&quot;:{&quot;pkid&quot;:&quot;b7238093-6ef8-4b92-abce-cdf51dff1ba4&quot;,&quot;psNo&quot;:&quot;0401018100300075&quot;,&quot;code&quot;:&quot;0401018100300075&quot;,&quot;psName&quot;:&quot;高新区泵站新增测试&quot;,&quot;address&quot;:&quot;接口自动化新增&quot;,&quot;psType&quot;:&quot;BZ_01&quot;,&quot;psTypeName&quot;:null,&quot;pumpNum&quot;:50,&quot;ownerUnit&quot;:&quot;陕西省西安市高新区&quot;,&quot;psStatus&quot;:&quot;1&quot;,&quot;psStatusName&quot;:null,&quot;psCreateTime&quot;:&quot;2020-03-03&quot;,&quot;orderNum&quot;:null}}
+INFO     log:test_jy_api_pump_station_add_modify_delete.py:24 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_api_pump_station_add_modify_delete.py:26 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-泵站管理-唯一性校验
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_api_pump_station_add_modify_delete.py::TestJinYangApiCreateModifyDelete::test_verify_unique_pkid[/udims/pump-station/exist-POST-None-None-{\n &quot;pkid&quot;: 0,\n &quot;psName&quot;: &quot;\u9ad8\u65b0\u533a\u6cf5\u7ad9\u65b0\u589e\u6d4b\u8bd5&quot;\n}-None-200-False]</td>
+          <td class="col-duration">0.11</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/pump-station/exist
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;pkid&quot;: &quot;b7238093-6ef8-4b92-abce-cdf51dff1ba4&quot;,
+    &quot;psName&quot;: &quot;高新区泵站新增测试&quot;
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;,&quot;data&quot;:false}
+INFO     log:test_jy_api_pump_station_add_modify_delete.py:48 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_api_pump_station_add_modify_delete.py:49 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-泵站管理-唯一性校验
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_api_pump_station_add_modify_delete.py::TestJinYangApiCreateModifyDelete::test_verify_unique_pkid[/udims/pump-station/exist-POST-None-None-{\n &quot;pkid&quot;: 0,\n &quot;psName&quot;: &quot;\u9ad8\u65b0\u533a\u6cf5\u7ad9\u4e0d\u91cd\u590d&quot;\n}-None-200-False]</td>
+          <td class="col-duration">0.09</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/pump-station/exist
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;pkid&quot;: &quot;b7238093-6ef8-4b92-abce-cdf51dff1ba4&quot;,
+    &quot;psName&quot;: &quot;高新区泵站不重复&quot;
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;,&quot;data&quot;:false}
+INFO     log:test_jy_api_pump_station_add_modify_delete.py:48 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_api_pump_station_add_modify_delete.py:49 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-泵站管理-修改泵站信息
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_api_pump_station_add_modify_delete.py::TestJinYangApiCreateModifyDelete::test_modify_pump_station_api[/udims/pump-station/update-POST-None-None-{\n &quot;address&quot;: &quot;\u81ea\u52a8\u5316\u6d4b\u8bd5\u4fee\u6539&quot;,\n &quot;area&quot;: 6666,\n &quot;attachmentList&quot;: [\n  {\n   &quot;contentDescription&quot;: &quot;\u6d4b\u8bd5\u63cf\u8ff0&quot;,\n   &quot;entryTime&quot;: &quot;2021-08-14&quot;,\n   &quot;fileIdentiful&quot;: &quot;aa/bb/cc.jpg&quot;,\n   &quot;id&quot;: null,\n   &quot;orderNum&quot;: null,\n   &quot;remark&quot;: &quot;\u6d4b\u8bd5\u5907\u6ce8&quot;,\n   &quot;resourceName&quot;: &quot;\u6392\u6c34\u6237\u9644\u4ef6001&quot;,\n   &quot;updateUserId&quot;: &quot;001&quot;,\n   &quot;updateUserName&quot;: &quot;\u5f20\u4e09&quot;,\n   &quot;uploadUserId&quot;: &quot;002&quot;,\n   &quot;uploadUserName&quot;: &quot;\u674e\u56db&quot;\n  }\n ],\n &quot;backupPowerSupply&quot;: &quot;\u5907\u7528\u7535\u6e90&quot;,\n    &quot;bopDes&quot;: &quot;\u8fd9\u91cc\u662f\u8f85\u52a9\u8bbe\u5907\u63cf\u8ff0&quot;,\n    &quot;contactInfo&quot;: &quot;13806660888&quot;,\n    &quot;dataSource&quot;: &quot;1&quot;,\n     &quot;dataSourceNotes&quot;: &quot;\u6570\u636e\u6765\u6e90\u5907\u6ce8&quot;,\n    &quot;desRainSize&quot;: 200,\n    &quot;desWasteSize&quot;: 3000,\n    &quot;fillDate&quot;: &quot;2020-03-03 18:20:20&quot;,\n    &quot;fillUserName&quot;: &quot;\u5f20\u4e50&quot;,\n    &quot;forebayDepth&quot;: 888,\n    &quot;forebayLength&quot;: 666,\n    &quot;forebayWidth&quot;: 333,\n    &quot;imageIds&quot;: &quot;/aa/bb/cc&quot;,\n    &quot;installedCapacity&quot;: 555,\n    &quot;insumpDesignHeigth&quot;: 123,\n    &quot;insumpMaxHeigth&quot;: 456,\n    &quot;insumpMaxRunHeigth&quot;: 789,\n    &quot;insumpMinRunHeigth&quot;: 912,\n    &quot;lgtd&quot;: 123.123,\n    &quot;lttd&quot;: 456.789,\n    &quot;masterPowerSupply&quot;: &quot;\u4e3b\u4f9b\u7535\u6e90&quot;,\n &quot;moniEquipmentList&quot;: [\n  {\n   &quot;buildTime&quot;: &quot;2021-08-14&quot;,\n   &quot;monitorItem&quot;: &quot;\u6c34\u8d28\uff0c\u6d41\u91cf&quot;,\n   &quot;pkid&quot;: null,\n   &quot;pointCode&quot;: &quot;point001&quot;,\n   &quot;pointName&quot;: &quot;1\u53f7\u76d1\u6d4b\u70b9&quot;,\n   &quot;sort&quot;: null,\n   &quot;transferType&quot;: 0,\n   &quot;transferTypeName&quot;: null\n  }\n ],\n  &quot;outsumpDesignHeigth&quot;: 159,\n    &quot;outsumpMaxRunHeigth&quot;: 753,\n    &quot;outsumpMinRunHeigth&quot;: 563,\n    &quot;ownerUnit&quot;: &quot;\u9655\u897f\u7701\u897f\u5b89\u5e02\u9ad8\u65b0\u533a&quot;,\n    &quot;pkid&quot;: 12,\n    &quot;psCreateTime&quot;: &quot;2020-03-03 18:20:20&quot;,\n    &quot;psName&quot;: &quot;\u9ad8\u65b0\u533a\u6cf5\u7ad9&quot;,\n    &quot;psStatus&quot;: &quot;1&quot;,\n    &quot;psType&quot;: &quot;BZ_01&quot;,\n &quot;pumpList&quot;: [\n  {\n   &quot;desRainSize&quot;: 666,\n   &quot;desWasteSize&quot;: 666,\n   &quot;designFlow&quot;: 666,\n   &quot;hasBackup&quot;: 1,\n   &quot;lift&quot;: 888,\n   &quot;manufacturer&quot;: &quot;\u6df1\u5733\u524d\u6d77&quot;,\n   &quot;pkid&quot;: null,\n   &quot;model&quot;: &quot;x666&quot;,\n   &quot;name&quot;: &quot;\u5f3a\u529b\u6cf5&quot;,\n   &quot;no&quot;: &quot;1234&quot;,\n   &quot;power&quot;: 200,\n   &quot;type&quot;: &quot;1&quot;,\n   &quot;pumpStationId&quot;: 11,\n   &quot;startDepth&quot;: 600,\n   &quot;stopDepth&quot;: 800\n  }\n ],\n &quot;pumpNum&quot;: 50,\n    &quot;realRainSize&quot;: 666,\n    &quot;realWasteSize&quot;: 999,\n    &quot;remark&quot;: &quot;\u8fd9\u91cc\u662f\u5176\u4ed6\u5907\u6ce8&quot;,\n    &quot;serviceArea&quot;: 2000,\n    &quot;serviceScope&quot;: &quot;\u8fd9\u91cc\u662f\u670d\u52a1\u8303\u56f4&quot;,\n    &quot;stormRecurrent&quot;: 2\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.15</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/pump-station/update
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;address&quot;: &quot;自动化测试修改&quot;,
+    &quot;area&quot;: 6666,
+    &quot;attachmentList&quot;: [
+        {
+            &quot;contentDescription&quot;: &quot;测试描述&quot;,
+            &quot;entryTime&quot;: &quot;2021-08-14&quot;,
+            &quot;fileIdentiful&quot;: &quot;aa/bb/cc.jpg&quot;,
+            &quot;id&quot;: null,
+            &quot;orderNum&quot;: null,
+            &quot;remark&quot;: &quot;测试备注&quot;,
+            &quot;resourceName&quot;: &quot;排水户附件001&quot;,
+            &quot;updateUserId&quot;: &quot;001&quot;,
+            &quot;updateUserName&quot;: &quot;张三&quot;,
+            &quot;uploadUserId&quot;: &quot;002&quot;,
+            &quot;uploadUserName&quot;: &quot;李四&quot;
+        }
+    ],
+    &quot;backupPowerSupply&quot;: &quot;备用电源&quot;,
+    &quot;bopDes&quot;: &quot;这里是辅助设备描述&quot;,
+    &quot;contactInfo&quot;: &quot;13806660888&quot;,
+    &quot;dataSource&quot;: &quot;1&quot;,
+    &quot;dataSourceNotes&quot;: &quot;数据来源备注&quot;,
+    &quot;desRainSize&quot;: 200,
+    &quot;desWasteSize&quot;: 3000,
+    &quot;fillDate&quot;: &quot;2020-03-03 18:20:20&quot;,
+    &quot;fillUserName&quot;: &quot;张乐&quot;,
+    &quot;forebayDepth&quot;: 888,
+    &quot;forebayLength&quot;: 666,
+    &quot;forebayWidth&quot;: 333,
+    &quot;imageIds&quot;: &quot;/aa/bb/cc&quot;,
+    &quot;installedCapacity&quot;: 555,
+    &quot;insumpDesignHeigth&quot;: 123,
+    &quot;insumpMaxHeigth&quot;: 456,
+    &quot;insumpMaxRunHeigth&quot;: 789,
+    &quot;insumpMinRunHeigth&quot;: 912,
+    &quot;lgtd&quot;: 123.123,
+    &quot;lttd&quot;: 456.789,
+    &quot;masterPowerSupply&quot;: &quot;主供电源&quot;,
+    &quot;moniEquipmentList&quot;: [
+        {
+            &quot;buildTime&quot;: &quot;2021-08-14&quot;,
+            &quot;monitorItem&quot;: &quot;水质，流量&quot;,
+            &quot;pkid&quot;: null,
+            &quot;pointCode&quot;: &quot;point001&quot;,
+            &quot;pointName&quot;: &quot;1号监测点&quot;,
+            &quot;sort&quot;: null,
+            &quot;transferType&quot;: 0,
+            &quot;transferTypeName&quot;: null
+        }
+    ],
+    &quot;outsumpDesignHeigth&quot;: 159,
+    &quot;outsumpMaxRunHeigth&quot;: 753,
+    &quot;outsumpMinRunHeigth&quot;: 563,
+    &quot;ownerUnit&quot;: &quot;陕西省西安市高新区&quot;,
+    &quot;pkid&quot;: &quot;b7238093-6ef8-4b92-abce-cdf51dff1ba4&quot;,
+    &quot;psCreateTime&quot;: &quot;2020-03-03 18:20:20&quot;,
+    &quot;psName&quot;: &quot;高新区泵站&quot;,
+    &quot;psStatus&quot;: &quot;1&quot;,
+    &quot;psType&quot;: &quot;BZ_01&quot;,
+    &quot;pumpList&quot;: [
+        {
+            &quot;desRainSize&quot;: 666,
+            &quot;desWasteSize&quot;: 666,
+            &quot;designFlow&quot;: 666,
+            &quot;hasBackup&quot;: 1,
+            &quot;lift&quot;: 888,
+            &quot;manufacturer&quot;: &quot;深圳前海&quot;,
+            &quot;pkid&quot;: null,
+            &quot;model&quot;: &quot;x666&quot;,
+            &quot;name&quot;: &quot;强力泵&quot;,
+            &quot;no&quot;: &quot;1234&quot;,
+            &quot;power&quot;: 200,
+            &quot;type&quot;: &quot;1&quot;,
+            &quot;pumpStationId&quot;: 11,
+            &quot;startDepth&quot;: 600,
+            &quot;stopDepth&quot;: 800
+        }
+    ],
+    &quot;pumpNum&quot;: 50,
+    &quot;realRainSize&quot;: 666,
+    &quot;realWasteSize&quot;: 999,
+    &quot;remark&quot;: &quot;这里是其他备注&quot;,
+    &quot;serviceArea&quot;: 2000,
+    &quot;serviceScope&quot;: &quot;这里是服务范围&quot;,
+    &quot;stormRecurrent&quot;: 2
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;,&quot;data&quot;:&quot;更新成功&quot;}
+INFO     log:test_jy_api_pump_station_add_modify_delete.py:67 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_api_pump_station_add_modify_delete.py:69 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-泵站管理-删除泵站信息
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_api_pump_station_add_modify_delete.py::TestJinYangApiCreateModifyDelete::test_delete_pump_station_api[/udims/pump-station/delete-POST-None-None-{\n &quot;pkid&quot;: 0,\n &quot;reason&quot;: &quot;\u63a5\u53e3\u81ea\u52a8\u5316\u6d4b\u8bd5\u5220\u9664&quot;\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.13</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/pump-station/delete
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;pkid&quot;: &quot;b7238093-6ef8-4b92-abce-cdf51dff1ba4&quot;,
+    &quot;reason&quot;: &quot;接口自动化测试删除&quot;
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;,&quot;data&quot;:&quot;删除成功&quot;}
+INFO     log:test_jy_api_pump_station_add_modify_delete.py:87 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_api_pump_station_add_modify_delete.py:89 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-新增污水厂信息
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_api_waste_water_factory_add_modify_delete.py::TestJYWasteWaterFactoryApiCreateModifyDelete::test_add_waste_water_factory_api[/udims/wasteWater-factory/create-POST-None-None-{\n &quot;address&quot;: &quot;\u63a5\u53e3\u81ea\u52a8\u5316\u6d4b\u8bd5&quot;,\n &quot;ammoniaTotalSize&quot;: 2,\n &quot;approvalFileNo&quot;: &quot;8886666&quot;,\n &quot;businessUnit&quot;: &quot;\u9655\u897f\u7701\u897f\u5b89\u5e02\u96c1\u5854\u533a&quot;,\n &quot;businessUnitName&quot;: &quot;\u9655\u897f\u7701\u897f\u5b89\u5e02\u96c1\u5854\u533a\u91cf\u5b50\u57ce&quot;,\n &quot;businessUnitTd&quot;: &quot;\u5f20\u4e50&quot;,\n &quot;businessUnitTel&quot;: &quot;186666666&quot;,\n &quot;createTime&quot;: &quot;2021-09-09&quot;,\n &quot;creditCode&quot;: &quot;66668888&quot;,\n &quot;dataSource&quot;: &quot;\u4eba\u5de5\u7edf\u8ba1&quot;,\n &quot;dataSourceNotes&quot;: &quot;\u4eba\u5de5\u7edf\u8ba1&quot;,\n &quot;facilityType&quot;: &quot;WSC_01&quot;,\n &quot;fillDate&quot;: &quot;2021-09-08 19:20:20&quot;,\n &quot;fillUserName&quot;: &quot;\u63a5\u53e3\u81ea\u52a8\u5316\u6d4b\u8bd5&quot;,\n &quot;lgtd&quot;: 666,\n &quot;lttd&quot;: 888,\n &quot;name&quot;: &quot;\u897f\u5b89\u5e02\u96c1\u5854\u533a\u6c61\u6c34\u5904\u7406\u5382\u65b0\u589e&quot;,\n &quot;ownerUnit&quot;: &quot;\u897f\u5b89\u5e02\u96c1\u5854\u533a&quot;,\n &quot;oxygenTotalSize&quot;: 200,\n &quot;planFileNo&quot;: &quot;1322000000&quot;,\n &quot;processMethod&quot;: 1,\n &quot;pumpNum&quot;: 8,\n &quot;rainProcessDesc&quot;: 1,\n &quot;rainProcessSize&quot;: 200,\n &quot;realRainSize&quot;: 6,\n &quot;remark&quot;: &quot;13&quot;,\n &quot;sludgeProcessDesc&quot;: &quot;1000&quot;,\n &quot;sludgeProcessMethod&quot;: 1,\n &quot;sludgeProcessNotes&quot;: &quot;\u8fd9\u91cc\u662f\u5907\u6ce8&quot;,\n &quot;sludgeProcessRate&quot;: 200,\n &quot;sludgeProcessSize&quot;: 66,\n &quot;status&quot;: &quot;1&quot;,\n &quot;wasterLevel&quot;: &quot;2&quot;,\n &quot;wasterPermitNo&quot;: &quot;&quot;,\n &quot;wasterProcessDesc&quot;: 1,\n &quot;wasterProcessRate&quot;: 300,\n &quot;wasterProcessSize&quot;: 500,\n &quot;waterPermitNo&quot;: &quot;1686668&quot;,\n &quot;yearConsumption&quot;: 66\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.15</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:test_jy_api_waste_water_factory_add_modify_delete.py:20 *************** 开始执行用例 ***************
+INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/wasteWater-factory/create
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;address&quot;: &quot;接口自动化测试&quot;,
+    &quot;ammoniaTotalSize&quot;: 2,
+    &quot;approvalFileNo&quot;: &quot;8886666&quot;,
+    &quot;businessUnit&quot;: &quot;陕西省西安市雁塔区&quot;,
+    &quot;businessUnitName&quot;: &quot;陕西省西安市雁塔区量子城&quot;,
+    &quot;businessUnitTd&quot;: &quot;张乐&quot;,
+    &quot;businessUnitTel&quot;: &quot;186666666&quot;,
+    &quot;createTime&quot;: &quot;2021-09-09&quot;,
+    &quot;creditCode&quot;: &quot;66668888&quot;,
+    &quot;dataSource&quot;: &quot;人工统计&quot;,
+    &quot;dataSourceNotes&quot;: &quot;人工统计&quot;,
+    &quot;facilityType&quot;: &quot;WSC_01&quot;,
+    &quot;fillDate&quot;: &quot;2021-09-08 19:20:20&quot;,
+    &quot;fillUserName&quot;: &quot;接口自动化测试&quot;,
+    &quot;lgtd&quot;: 666,
+    &quot;lttd&quot;: 888,
+    &quot;name&quot;: &quot;西安市雁塔区污水处理厂新增&quot;,
+    &quot;ownerUnit&quot;: &quot;西安市雁塔区&quot;,
+    &quot;oxygenTotalSize&quot;: 200,
+    &quot;planFileNo&quot;: &quot;1322000000&quot;,
+    &quot;processMethod&quot;: 1,
+    &quot;pumpNum&quot;: 8,
+    &quot;rainProcessDesc&quot;: 1,
+    &quot;rainProcessSize&quot;: 200,
+    &quot;realRainSize&quot;: 6,
+    &quot;remark&quot;: &quot;13&quot;,
+    &quot;sludgeProcessDesc&quot;: &quot;1000&quot;,
+    &quot;sludgeProcessMethod&quot;: 1,
+    &quot;sludgeProcessNotes&quot;: &quot;这里是备注&quot;,
+    &quot;sludgeProcessRate&quot;: 200,
+    &quot;sludgeProcessSize&quot;: 66,
+    &quot;status&quot;: &quot;1&quot;,
+    &quot;wasterLevel&quot;: &quot;2&quot;,
+    &quot;wasterPermitNo&quot;: &quot;&quot;,
+    &quot;wasterProcessDesc&quot;: 1,
+    &quot;wasterProcessRate&quot;: 300,
+    &quot;wasterProcessSize&quot;: 500,
+    &quot;waterPermitNo&quot;: &quot;1686668&quot;,
+    &quot;yearConsumption&quot;: 66
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;,&quot;data&quot;:{&quot;pkid&quot;:&quot;43ae5a95-ff48-4291-9f4d-e69de122d33a&quot;,&quot;no&quot;:&quot;0410018100300071&quot;,&quot;code&quot;:&quot;0410018100300071&quot;,&quot;name&quot;:&quot;西安市雁塔区污水处理厂新增&quot;,&quot;address&quot;:&quot;接口自动化测试&quot;,&quot;facilityType&quot;:&quot;WSC_01&quot;,&quot;facilityTypeName&quot;:null,&quot;wasterLevel&quot;:&quot;2&quot;,&quot;wasterLevelName&quot;:null,&quot;ownerUnit&quot;:&quot;西安市雁塔区&quot;,&quot;businessUnit&quot;:&quot;陕西省西安市雁塔区&quot;,&quot;status&quot;:&quot;1&quot;,&quot;statusName&quot;:null,&quot;createTime&quot;:&quot;2021-09-09&quot;,&quot;orderNum&quot;:null}}
+INFO     log:test_jy_api_waste_water_factory_add_modify_delete.py:25 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_api_waste_water_factory_add_modify_delete.py:27 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-污水厂管理-唯一性校验
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_api_waste_water_factory_add_modify_delete.py::TestJYWasteWaterFactoryApiCreateModifyDelete::test_verify_unique_pkid[/udims/wasteWater-factory/exist-POST-None-None-{\n &quot;name&quot;: &quot;\u897f\u5b89\u5e02\u96c1\u5854\u533a\u6c61\u6c34\u5904\u7406\u5382\u65b0\u589e&quot;,\n &quot;pkid&quot;: 0\n}-None-200-False]</td>
+          <td class="col-duration">0.13</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/wasteWater-factory/exist
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;name&quot;: &quot;西安市雁塔区污水处理厂新增&quot;,
+    &quot;pkid&quot;: &quot;43ae5a95-ff48-4291-9f4d-e69de122d33a&quot;
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;,&quot;data&quot;:false}
+INFO     log:test_jy_api_waste_water_factory_add_modify_delete.py:46 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_api_waste_water_factory_add_modify_delete.py:47 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-污水厂管理-唯一性校验
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_api_waste_water_factory_add_modify_delete.py::TestJYWasteWaterFactoryApiCreateModifyDelete::test_verify_unique_pkid[/udims/wasteWater-factory/exist-POST-None-None-{\n &quot;name&quot;: &quot;\u897f\u5b89\u5e02\u96c1\u5854\u533a\u6c61\u6c34\u5904\u7406\u5382\u4e0d\u91cd\u590d&quot;,\n &quot;pkid&quot;: 0\n}-None-200-False]</td>
+          <td class="col-duration">0.10</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/wasteWater-factory/exist
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;name&quot;: &quot;西安市雁塔区污水处理厂不重复&quot;,
+    &quot;pkid&quot;: &quot;43ae5a95-ff48-4291-9f4d-e69de122d33a&quot;
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;,&quot;data&quot;:false}
+INFO     log:test_jy_api_waste_water_factory_add_modify_delete.py:46 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_api_waste_water_factory_add_modify_delete.py:47 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-修改污水厂信息
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_api_waste_water_factory_add_modify_delete.py::TestJYWasteWaterFactoryApiCreateModifyDelete::test_modify_add_waste_water_factory_api[/udims/wasteWater-factory/update-POST-None-None-{\n &quot;address&quot;: &quot;\u63a5\u53e3\u81ea\u52a8\u5316\u6d4b\u8bd5\u4fee\u6539&quot;,\n &quot;ammoniaTotalSize&quot;: 88,\n &quot;approvalFileNo&quot;: &quot;1866666666&quot;,\n &quot;attachmentList&quot;: [\n     {\n   &quot;contentDescription&quot;: &quot;\u6d4b\u8bd5\u63cf\u8ff0&quot;,\n   &quot;entryTime&quot;: &quot;2021-08-14&quot;,\n   &quot;fileIdentiful&quot;: &quot;aa/bb/cc.jpg&quot;,\n   &quot;id&quot;: null,\n   &quot;orderNum&quot;: null,\n   &quot;remark&quot;: &quot;\u6d4b\u8bd5\u5907\u6ce8&quot;,\n   &quot;resourceName&quot;: &quot;\u6392\u6c34\u6237\u9644\u4ef6001&quot;,\n   &quot;updateUserId&quot;: &quot;001&quot;,\n   &quot;updateUserName&quot;: &quot;\u5f20\u4e09&quot;,\n   &quot;uploadUserId&quot;: &quot;002&quot;,\n   &quot;uploadUserName&quot;: &quot;\u674e\u56db&quot;\n  }\n ],\n &quot;businessUnit&quot;: &quot;\u9655\u897f\u7701\u897f\u5b89\u5e02\u96c1\u5854\u533a&quot;,\n &quot;businessUnitName&quot;: &quot;\u9655\u897f\u7701\u897f\u5b89\u5e02\u96c1\u5854\u533a\u91cf\u5b50\u57ce&quot;,\n &quot;businessUnitTd&quot;: &quot;\u5f20\u4e50&quot;,\n &quot;businessUnitTel&quot;: &quot;186666666&quot;,\n &quot;createTime&quot;: &quot;2021-09-09&quot;,\n &quot;creditCode&quot;: &quot;66668888&quot;,\n &quot;dataSource&quot;: &quot;\u4eba\u5de5\u7edf\u8ba1&quot;,\n &quot;dataSourceNotes&quot;: &quot;\u4eba\u5de5\u7edf\u8ba1&quot;,\n &quot;facilityType&quot;:&quot;WSC_01&quot;,\n &quot;fillDate&quot;: &quot;2021-09-08 19:20:20&quot;,\n &quot;fillUserName&quot;: &quot;\u63a5\u53e3\u81ea\u52a8\u5316\u6d4b\u8bd5&quot;,\n &quot;lgtd&quot;: 666,\n &quot;lttd&quot;: 888,\n &quot;moniEquipmentList&quot;: [\n  {\n   &quot;buildTime&quot;: &quot;2021-08-14&quot;,\n   &quot;monitorItem&quot;: &quot;\u6c34\u8d28\uff0c\u6d41\u91cf&quot;,\n   &quot;pkid&quot;: null,\n   &quot;pointCode&quot;: &quot;point001&quot;,\n   &quot;pointName&quot;: &quot;1\u53f7\u76d1\u6d4b\u70b9&quot;,\n   &quot;sort&quot;: null,\n   &quot;transferType&quot;: 0,\n   &quot;transferTypeName&quot;: null\n  }\n ],\n &quot;name&quot;: &quot;\u897f\u5b89\u5e02\u96c1\u5854\u533a\u6c61\u6c34\u5904\u7406\u5382&quot;,\n &quot;ownerUnit&quot;: &quot;\u897f\u5b89\u5e02\u96c1\u5854\u533a&quot;,\n &quot;oxygenTotalSize&quot;: 200,\n &quot;planFileNo&quot;: &quot;1322000000&quot;,\n    &quot;pkid&quot;: 21,\n &quot;processMethod&quot;: 1,\n &quot;pumpNum&quot;: 8,\n &quot;rainProcessDesc&quot;: 1,\n &quot;rainProcessSize&quot;: 200,\n &quot;realRainSize&quot;: 6,\n &quot;remark&quot;: &quot;13&quot;,\n &quot;sludgeProcessDesc&quot;: &quot;1000&quot;,\n &quot;sludgeProcessMethod&quot;: 1,\n &quot;sludgeProcessNotes&quot;: &quot;\u8fd9\u91cc\u662f\u5907\u6ce8&quot;,\n &quot;sludgeProcessRate&quot;: 200,\n &quot;sludgeProcessSize&quot;: 66,\n &quot;status&quot;: &quot;1&quot;,\n &quot;wasterLevel&quot;: &quot;2&quot;,\n &quot;wasterPermitNo&quot;: &quot;&quot;,\n &quot;wasterProcessDesc&quot;: 1,\n &quot;wasterProcessRate&quot;: 300,\n &quot;wasterProcessSize&quot;: 500,\n &quot;waterPermitNo&quot;: &quot;1686668&quot;,\n &quot;yearConsumption&quot;: 66\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.13</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/wasteWater-factory/update
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;address&quot;: &quot;接口自动化测试修改&quot;,
+    &quot;ammoniaTotalSize&quot;: 88,
+    &quot;approvalFileNo&quot;: &quot;1866666666&quot;,
+    &quot;attachmentList&quot;: [
+        {
+            &quot;contentDescription&quot;: &quot;测试描述&quot;,
+            &quot;entryTime&quot;: &quot;2021-08-14&quot;,
+            &quot;fileIdentiful&quot;: &quot;aa/bb/cc.jpg&quot;,
+            &quot;id&quot;: null,
+            &quot;orderNum&quot;: null,
+            &quot;remark&quot;: &quot;测试备注&quot;,
+            &quot;resourceName&quot;: &quot;排水户附件001&quot;,
+            &quot;updateUserId&quot;: &quot;001&quot;,
+            &quot;updateUserName&quot;: &quot;张三&quot;,
+            &quot;uploadUserId&quot;: &quot;002&quot;,
+            &quot;uploadUserName&quot;: &quot;李四&quot;
+        }
+    ],
+    &quot;businessUnit&quot;: &quot;陕西省西安市雁塔区&quot;,
+    &quot;businessUnitName&quot;: &quot;陕西省西安市雁塔区量子城&quot;,
+    &quot;businessUnitTd&quot;: &quot;张乐&quot;,
+    &quot;businessUnitTel&quot;: &quot;186666666&quot;,
+    &quot;createTime&quot;: &quot;2021-09-09&quot;,
+    &quot;creditCode&quot;: &quot;66668888&quot;,
+    &quot;dataSource&quot;: &quot;人工统计&quot;,
+    &quot;dataSourceNotes&quot;: &quot;人工统计&quot;,
+    &quot;facilityType&quot;: &quot;WSC_01&quot;,
+    &quot;fillDate&quot;: &quot;2021-09-08 19:20:20&quot;,
+    &quot;fillUserName&quot;: &quot;接口自动化测试&quot;,
+    &quot;lgtd&quot;: 666,
+    &quot;lttd&quot;: 888,
+    &quot;moniEquipmentList&quot;: [
+        {
+            &quot;buildTime&quot;: &quot;2021-08-14&quot;,
+            &quot;monitorItem&quot;: &quot;水质，流量&quot;,
+            &quot;pkid&quot;: null,
+            &quot;pointCode&quot;: &quot;point001&quot;,
+            &quot;pointName&quot;: &quot;1号监测点&quot;,
+            &quot;sort&quot;: null,
+            &quot;transferType&quot;: 0,
+            &quot;transferTypeName&quot;: null
+        }
+    ],
+    &quot;name&quot;: &quot;西安市雁塔区污水处理厂&quot;,
+    &quot;ownerUnit&quot;: &quot;西安市雁塔区&quot;,
+    &quot;oxygenTotalSize&quot;: 200,
+    &quot;planFileNo&quot;: &quot;1322000000&quot;,
+    &quot;pkid&quot;: &quot;43ae5a95-ff48-4291-9f4d-e69de122d33a&quot;,
+    &quot;processMethod&quot;: 1,
+    &quot;pumpNum&quot;: 8,
+    &quot;rainProcessDesc&quot;: 1,
+    &quot;rainProcessSize&quot;: 200,
+    &quot;realRainSize&quot;: 6,
+    &quot;remark&quot;: &quot;13&quot;,
+    &quot;sludgeProcessDesc&quot;: &quot;1000&quot;,
+    &quot;sludgeProcessMethod&quot;: 1,
+    &quot;sludgeProcessNotes&quot;: &quot;这里是备注&quot;,
+    &quot;sludgeProcessRate&quot;: 200,
+    &quot;sludgeProcessSize&quot;: 66,
+    &quot;status&quot;: &quot;1&quot;,
+    &quot;wasterLevel&quot;: &quot;2&quot;,
+    &quot;wasterPermitNo&quot;: &quot;&quot;,
+    &quot;wasterProcessDesc&quot;: 1,
+    &quot;wasterProcessRate&quot;: 300,
+    &quot;wasterProcessSize&quot;: 500,
+    &quot;waterPermitNo&quot;: &quot;1686668&quot;,
+    &quot;yearConsumption&quot;: 66
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;,&quot;data&quot;:&quot;更新成功&quot;}
+INFO     log:test_jy_api_waste_water_factory_add_modify_delete.py:65 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_api_waste_water_factory_add_modify_delete.py:67 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-删除污水厂信息
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_api_waste_water_factory_add_modify_delete.py::TestJYWasteWaterFactoryApiCreateModifyDelete::test_delete_add_waste_water_factory_api[/udims/wasteWater-factory/delete-POST-None-None-{\n &quot;pkid&quot;: 0,\n &quot;reason&quot;: &quot;\u63a5\u53e3\u81ea\u52a8\u5316\u6d4b\u8bd5\u5220\u9664&quot;\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.10</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/wasteWater-factory/delete
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;pkid&quot;: &quot;43ae5a95-ff48-4291-9f4d-e69de122d33a&quot;,
+    &quot;reason&quot;: &quot;接口自动化测试删除&quot;
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;,&quot;data&quot;:&quot;删除成功&quot;}
+INFO     log:test_jy_api_waste_water_factory_add_modify_delete.py:85 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_api_waste_water_factory_add_modify_delete.py:87 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-排水管信息列表及详情
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_list_detail_base_info.py::TestJinYangApi::test_get_drain_pipe_api[/udims/drain-pipe/desc-POST-None-None-{\n &quot;code&quot;: &quot;1234567891234567890&quot;\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.10</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:test_jy_list_detail_base_info.py:16 *************** 开始执行用例 ***************
+INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/drain-pipe/desc
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;code&quot;: &quot;1234567891234567890&quot;
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;}
+INFO     log:test_jy_list_detail_base_info.py:22 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_list_detail_base_info.py:24 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-排水管信息列表及详情
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_list_detail_base_info.py::TestJinYangApi::test_get_drain_pipe_api[/udims/drain-pipe/list-POST-None-None-{\n &quot;category&quot;: 0,\n &quot;curPage&quot;: 1,\n &quot;drainPipeName&quot;: &quot;&quot;,\n &quot;endTime&quot;: &quot;&quot;,\n &quot;pageSize&quot;: 5,\n &quot;startTime&quot;: &quot;&quot;,\n &quot;status&quot;: 0,\n &quot;type&quot;: 0\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.16</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:test_jy_list_detail_base_info.py:16 *************** 开始执行用例 ***************
+INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/drain-pipe/list
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;category&quot;: 0,
+    &quot;curPage&quot;: 1,
+    &quot;drainPipeName&quot;: &quot;&quot;,
+    &quot;endTime&quot;: &quot;&quot;,
+    &quot;pageSize&quot;: 5,
+    &quot;startTime&quot;: &quot;&quot;,
+    &quot;status&quot;: 0,
+    &quot;type&quot;: 0
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;,&quot;data&quot;:{&quot;curPage&quot;:null,&quot;pageSize&quot;:null,&quot;total&quot;:null,&quot;rows&quot;:null}}
+INFO     log:test_jy_list_detail_base_info.py:22 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_list_detail_base_info.py:24 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-排水管信息列表及详情
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_list_detail_base_info.py::TestJinYangApi::test_get_drain_pipe_api[/udims/drain-pipe/export-param-POST-None-None-{\n &quot;category&quot;: 0,\n &quot;curPage&quot;: 1,\n &quot;drainPipeName&quot;: &quot;&quot;,\n &quot;endTime&quot;: &quot;&quot;,\n &quot;pageSize&quot;: 5,\n &quot;startTime&quot;: &quot;&quot;,\n &quot;status&quot;: 0,\n &quot;type&quot;: 0\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.09</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:test_jy_list_detail_base_info.py:16 *************** 开始执行用例 ***************
+INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/drain-pipe/export-param
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;category&quot;: 0,
+    &quot;curPage&quot;: 1,
+    &quot;drainPipeName&quot;: &quot;&quot;,
+    &quot;endTime&quot;: &quot;&quot;,
+    &quot;pageSize&quot;: 5,
+    &quot;startTime&quot;: &quot;&quot;,
+    &quot;status&quot;: 0,
+    &quot;type&quot;: 0
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;,&quot;data&quot;:&quot;ace627c314c34a79b6ca6d264ce08909&quot;}
+INFO     log:test_jy_list_detail_base_info.py:22 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_list_detail_base_info.py:24 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-检查井管理列表及详情
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_list_detail_base_info.py::TestJinYangApi::test_get_inspection_well_api[/udims/inspection-well/desc-POST-None-None-{\n &quot;code&quot;: &quot;&quot;\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.10</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:test_jy_list_detail_base_info.py:34 *************** 开始执行用例 ***************
+INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/inspection-well/desc
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;code&quot;: &quot;&quot;
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;}
+INFO     log:test_jy_list_detail_base_info.py:39 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_list_detail_base_info.py:41 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-检查井管理列表及详情
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_list_detail_base_info.py::TestJinYangApi::test_get_inspection_well_api[/udims/inspection-well/list-POST-None-None-{\n &quot;category&quot;: 0,\n &quot;curPage&quot;: 1,\n &quot;endTime&quot;: &quot;&quot;,\n &quot;inspectionWellName&quot;: &quot;&quot;,\n &quot;pageSize&quot;: 5,\n &quot;startTime&quot;: &quot;&quot;,\n &quot;status&quot;: 0\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.14</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:test_jy_list_detail_base_info.py:34 *************** 开始执行用例 ***************
+INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/inspection-well/list
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;category&quot;: 0,
+    &quot;curPage&quot;: 1,
+    &quot;endTime&quot;: &quot;&quot;,
+    &quot;inspectionWellName&quot;: &quot;&quot;,
+    &quot;pageSize&quot;: 5,
+    &quot;startTime&quot;: &quot;&quot;,
+    &quot;status&quot;: 0
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;,&quot;data&quot;:{&quot;curPage&quot;:null,&quot;pageSize&quot;:null,&quot;total&quot;:null,&quot;rows&quot;:null}}
+INFO     log:test_jy_list_detail_base_info.py:39 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_list_detail_base_info.py:41 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-检查井管理列表及详情
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_list_detail_base_info.py::TestJinYangApi::test_get_inspection_well_api[/udims/inspection-well/export-param-POST-None-None-{\n &quot;category&quot;: 0,\n &quot;curPage&quot;: 1,\n &quot;endTime&quot;: &quot;&quot;,\n &quot;inspectionWellName&quot;: &quot;&quot;,\n &quot;pageSize&quot;: 5,\n &quot;startTime&quot;: &quot;&quot;,\n &quot;status&quot;: 0\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.09</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:test_jy_list_detail_base_info.py:34 *************** 开始执行用例 ***************
+INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/inspection-well/export-param
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;category&quot;: 0,
+    &quot;curPage&quot;: 1,
+    &quot;endTime&quot;: &quot;&quot;,
+    &quot;inspectionWellName&quot;: &quot;&quot;,
+    &quot;pageSize&quot;: 5,
+    &quot;startTime&quot;: &quot;&quot;,
+    &quot;status&quot;: 0
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;,&quot;data&quot;:&quot;4c31fe4232034955b27a33ae8ffbefd8&quot;}
+INFO     log:test_jy_list_detail_base_info.py:39 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_list_detail_base_info.py:41 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-排数户管理列表及详情
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_list_detail_base_info.py::TestJinYangApi::test_get_drainage_api[/udims/drainage/company/company-detail-POST-None-None-{\n &quot;pkid&quot;: 10\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.09</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:test_jy_list_detail_base_info.py:52 *************** 开始执行用例 ***************
+INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/drainage/company/company-detail
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;pkid&quot;: 10
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;}
+INFO     log:test_jy_list_detail_base_info.py:57 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_list_detail_base_info.py:59 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-排数户管理列表及详情
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_list_detail_base_info.py::TestJinYangApi::test_get_drainage_api[/udims/drainage/company/get-company-list-POST-None-None-{\n &quot;curPage&quot;: 1,\n &quot;effectiveTime&quot;: &quot;&quot;,\n &quot;name&quot;: &quot;&quot;,\n &quot;pageSize&quot;: 5,\n &quot;status&quot;: 0,\n &quot;type&quot;: 0\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.10</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:test_jy_list_detail_base_info.py:52 *************** 开始执行用例 ***************
+INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/drainage/company/get-company-list
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;curPage&quot;: 1,
+    &quot;effectiveTime&quot;: &quot;&quot;,
+    &quot;name&quot;: &quot;&quot;,
+    &quot;pageSize&quot;: 5,
+    &quot;status&quot;: 0,
+    &quot;type&quot;: 0
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;,&quot;data&quot;:{&quot;curPage&quot;:null,&quot;pageSize&quot;:null,&quot;total&quot;:null,&quot;rows&quot;:null}}
+INFO     log:test_jy_list_detail_base_info.py:57 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_list_detail_base_info.py:59 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-智能井盖管理列表及详情
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_list_detail_base_info.py::TestJinYangApi::test_intelligent_well_lid_info_api[/udims/intelligent/well-lid/get-well-lid-list-POST-None-None-{\n &quot;address&quot;: &quot;&quot;,\n &quot;buildTime&quot;: &quot;&quot;,\n &quot;curPage&quot;: 1,\n &quot;name&quot;: &quot;&quot;,\n &quot;pageSize&quot;: 5,\n &quot;status&quot;: 0\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.12</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:test_jy_list_detail_base_info.py:70 *************** 开始执行用例 ***************
+INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/intelligent/well-lid/get-well-lid-list
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;address&quot;: &quot;&quot;,
+    &quot;buildTime&quot;: &quot;&quot;,
+    &quot;curPage&quot;: 1,
+    &quot;name&quot;: &quot;&quot;,
+    &quot;pageSize&quot;: 5,
+    &quot;status&quot;: 0
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;,&quot;data&quot;:{&quot;curPage&quot;:1,&quot;pageSize&quot;:5,&quot;total&quot;:5,&quot;rows&quot;:[{&quot;sort&quot;:1,&quot;pkid&quot;:&quot;fc822cc2-73e2-4aa9-b13b-25ac8374f189&quot;,&quot;wellLidName&quot;:&quot;test111&quot;,&quot;wellLidCode&quot;:&quot;0607008100300077&quot;,&quot;address&quot;:&quot;湖南省长沙市浏阳市北盛镇开元大道&quot;,&quot;inspectionWellName&quot;:&quot;23YS59&quot;,&quot;buildTime&quot;:&quot;2021-11-01&quot;,&quot;ownership&quot;:&quot;111&quot;,&quot;status&quot;:0,&quot;statusName&quot;:&quot;停用&quot;},{&quot;sort&quot;:2,&quot;pkid&quot;:&quot;a876f0a8-5825-47cf-accc-47fb18a127dc&quot;,&quot;wellLidName&quot;:&quot;1111&quot;,&quot;wellLidCode&quot;:&quot;0607008100300076&quot;,&quot;address&quot;:&quot;湖南省长沙市浏阳市永安镇大水凼&quot;,&quot;inspectionWellName&quot;:&quot;3YS37&quot;,&quot;buildTime&quot;:&quot;2021-11-15&quot;,&quot;ownership&quot;:&quot;1111&quot;,&quot;status&quot;:0,&quot;statusName&quot;:&quot;停用&quot;},{&quot;sort&quot;:3,&quot;pkid&quot;:&quot;1cb11392-e1a5-4af8-9201-9d40bacd1bcd&quot;,&quot;wellLidName&quot;:&quot;111&quot;,&quot;wellLidCode&quot;:&quot;0607008100300078&quot;,&quot;address&quot;:&quot;湖南省长沙市浏阳市北盛镇开元大道&quot;,&quot;inspectionWellName&quot;:&quot;111（23YS59）&quot;,&quot;buildTime&quot;:&quot;2021-11-18&quot;,&quot;ownership&quot;:&quot;111&quot;,&quot;status&quot;:0,&quot;statusName&quot;:&quot;停用&quot;},{&quot;sort&quot;:4,&quot;pkid&quot;:&quot;118&quot;,&quot;wellLidName&quot;:&quot;智能井盖_JLZ22180267675&quot;,&quot;wellLidCode&quot;:&quot;0607008100300075&quot;,&quot;address&quot;:&quot;国家级浏阳经济技术开发区管理委员会西南角出口处&quot;,&quot;inspectionWellName&quot;:&quot;智能井盖_JLZ22180267675（18WS41）&quot;,&quot;buildTime&quot;:&quot;2021-10-13&quot;,&quot;ownership&quot;:&quot;城管分局管网办&quot;,&quot;status&quot;:0,&quot;statusName&quot;:&quot;停用&quot;},{&quot;sort&quot;:5,&quot;pkid&quot;:&quot;114&quot;,&quot;wellLidName&quot;:&quot;高新区智能井盖&quot;,&quot;wellLidCode&quot;:&quot;0607008100300071&quot;,&quot;address&quot;:&quot;13YS36-3地址&quot;,&quot;inspectionWellName&quot;:&quot;高新区智能井盖（13YS36-3）&quot;,&quot;buildTime&quot;:&quot;2021-09-23&quot;,&quot;ownership&quot;:&quot;城管分局管网办&quot;,&quot;status&quot;:0,&quot;statusName&quot;:&quot;停用&quot;}]}}
+INFO     log:test_jy_list_detail_base_info.py:75 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_list_detail_base_info.py:77 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-智能井盖管理列表及详情
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_list_detail_base_info.py::TestJinYangApi::test_intelligent_well_lid_info_api[/udims/intelligent/well-lid/well-lid-detail-POST-None-None-{\n &quot;pkid&quot;: 10\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.09</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:test_jy_list_detail_base_info.py:70 *************** 开始执行用例 ***************
+INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/intelligent/well-lid/well-lid-detail
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;pkid&quot;: 10
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;}
+INFO     log:test_jy_list_detail_base_info.py:75 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_list_detail_base_info.py:77 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-污水厂管理列表及详情
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_list_detail_base_info.py::TestJinYangApi::test_waste_water_factory_info_api[/udims/wasteWater-factory/detail-POST-None-None-{\n &quot;pkid&quot;: 22\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.10</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:test_jy_list_detail_base_info.py:88 *************** 开始执行用例 ***************
+INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/wasteWater-factory/detail
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;pkid&quot;: 22
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;,&quot;data&quot;:{&quot;pkid&quot;:null,&quot;no&quot;:null,&quot;code&quot;:null,&quot;name&quot;:null,&quot;address&quot;:null,&quot;lgtd&quot;:null,&quot;lttd&quot;:null,&quot;facilityType&quot;:null,&quot;facilityTypeName&quot;:null,&quot;wasterLevel&quot;:null,&quot;wasterLevelName&quot;:null,&quot;processMethod&quot;:null,&quot;processMethodName&quot;:null,&quot;yearConsumption&quot;:null,&quot;ownerUnit&quot;:null,&quot;businessUnit&quot;:null,&quot;status&quot;:null,&quot;statusName&quot;:null,&quot;createTime&quot;:null,&quot;wasterProcessSize&quot;:null,&quot;wasterProcessRate&quot;:null,&quot;realRainSize&quot;:null,&quot;wasterProcessDesc&quot;:null,&quot;rainProcessSize&quot;:null,&quot;rainProcessDesc&quot;:null,&quot;sludgeProcessSize&quot;:null,&quot;sludgeProcessRate&quot;:null,&quot;sludgeProcessDesc&quot;:null,&quot;sludgeProcessMethod&quot;:null,&quot;sludgeProcessMethodName&quot;:null,&quot;sludgeProcessNotes&quot;:null,&quot;pumpNum&quot;:null,&quot;businessUnitName&quot;:null,&quot;creditCode&quot;:null,&quot;businessUnitTel&quot;:null,&quot;businessUnitTd&quot;:null,&quot;wasterPermitNo&quot;:null,&quot;waterPermitNo&quot;:null,&quot;approvalFileNo&quot;:null,&quot;planFileNo&quot;:null,&quot;ammoniaTotalSize&quot;:null,&quot;oxygenTotalSize&quot;:null,&quot;fillUserName&quot;:null,&quot;fillDate&quot;:null,&quot;dataSource&quot;:null,&quot;dataSourceName&quot;:null,&quot;dataSourceNotes&quot;:null,&quot;remark&quot;:null,&quot;imageIds&quot;:null,&quot;moniEquipmentList&quot;:[],&quot;attachmentList&quot;:[]}}
+INFO     log:test_jy_list_detail_base_info.py:93 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_list_detail_base_info.py:95 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-污水厂管理列表及详情
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_list_detail_base_info.py::TestJinYangApi::test_waste_water_factory_info_api[/udims/wasteWater-factory/list-POST-None-None-{\n &quot;createTime&quot;: &quot;&quot;,\n &quot;curPage&quot;: 1,\n &quot;facilityType&quot;: &quot;&quot;,\n &quot;name&quot;: &quot;&quot;,\n &quot;pageSize&quot;: 5,\n &quot;status&quot;: &quot;&quot;\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.12</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:test_jy_list_detail_base_info.py:88 *************** 开始执行用例 ***************
+INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/wasteWater-factory/list
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;createTime&quot;: &quot;&quot;,
+    &quot;curPage&quot;: 1,
+    &quot;facilityType&quot;: &quot;&quot;,
+    &quot;name&quot;: &quot;&quot;,
+    &quot;pageSize&quot;: 5,
+    &quot;status&quot;: &quot;&quot;
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;,&quot;data&quot;:{&quot;curPage&quot;:1,&quot;pageSize&quot;:5,&quot;total&quot;:4,&quot;rows&quot;:[{&quot;pkid&quot;:&quot;f0e79a31-40df-4f11-9a00-fa3c2157d032&quot;,&quot;no&quot;:&quot;0410018100300066&quot;,&quot;code&quot;:null,&quot;name&quot;:&quot;高新区污水处理厂&quot;,&quot;address&quot;:&quot;地址&quot;,&quot;facilityType&quot;:&quot;WSC_01&quot;,&quot;facilityTypeName&quot;:&quot;城镇污水处理厂&quot;,&quot;wasterLevel&quot;:&quot;1&quot;,&quot;wasterLevelName&quot;:&quot;一级&quot;,&quot;ownerUnit&quot;:&quot;所属单位待确定&quot;,&quot;businessUnit&quot;:&quot;运营单位待确定&quot;,&quot;status&quot;:&quot;1&quot;,&quot;statusName&quot;:&quot;已建&quot;,&quot;createTime&quot;:&quot;2021-10-30&quot;,&quot;orderNum&quot;:1},{&quot;pkid&quot;:&quot;de85fd2e-b649-4d49-b0d5-8b13bd498a57&quot;,&quot;no&quot;:&quot;0410018100300069&quot;,&quot;code&quot;:null,&quot;name&quot;:&quot;1111&quot;,&quot;address&quot;:&quot;测试地址&quot;,&quot;facilityType&quot;:&quot;WSC_01&quot;,&quot;facilityTypeName&quot;:&quot;城镇污水处理厂&quot;,&quot;wasterLevel&quot;:&quot;2&quot;,&quot;wasterLevelName&quot;:&quot;二级&quot;,&quot;ownerUnit&quot;:&quot;111&quot;,&quot;businessUnit&quot;:&quot;111&quot;,&quot;status&quot;:&quot;1&quot;,&quot;statusName&quot;:&quot;已建&quot;,&quot;createTime&quot;:&quot;2021-11-15&quot;,&quot;orderNum&quot;:2},{&quot;pkid&quot;:&quot;52b3f4ff-3078-11eb-96e8-fc4dd4d243b2&quot;,&quot;no&quot;:&quot;0410018100300067&quot;,&quot;code&quot;:null,&quot;name&quot;:&quot;浏阳经开区污水处理工程有限公司（南园污水厂）&quot;,&quot;address&quot;:&quot;湖南省长沙国家生物产业基地康天路109号&quot;,&quot;facilityType&quot;:&quot;WSC_01&quot;,&quot;facilityTypeName&quot;:&quot;城镇污水处理厂&quot;,&quot;wasterLevel&quot;:&quot;1&quot;,&quot;wasterLevelName&quot;:&quot;一级&quot;,&quot;ownerUnit&quot;:&quot;权属单位待修改&quot;,&quot;businessUnit&quot;:&quot;运营单位待修改&quot;,&quot;status&quot;:&quot;1&quot;,&quot;statusName&quot;:&quot;已建&quot;,&quot;createTime&quot;:&quot;2021-10-28&quot;,&quot;orderNum&quot;:3},{&quot;pkid&quot;:&quot;0632d7fd-322d-11eb-96e8-fc4dd4d243b2&quot;,&quot;no&quot;:&quot;0410018100300068&quot;,&quot;code&quot;:null,&quot;name&quot;:&quot;浏阳经开区污水处理工程有限公司（北园污水厂）&quot;,&quot;address&quot;:&quot;湖南省长沙国家生物产业基地康天路109号&quot;,&quot;facilityType&quot;:&quot;WSC_01&quot;,&quot;facilityTypeName&quot;:&quot;城镇污水处理厂&quot;,&quot;wasterLevel&quot;:&quot;1&quot;,&quot;wasterLevelName&quot;:&quot;一级&quot;,&quot;ownerUnit&quot;:&quot;所属单位待确定&quot;,&quot;businessUnit&quot;:&quot;运营单位待确定&quot;,&quot;status&quot;:&quot;1&quot;,&quot;statusName&quot;:&quot;已建&quot;,&quot;createTime&quot;:&quot;2021-10-28&quot;,&quot;orderNum&quot;:4}]}}
+INFO     log:test_jy_list_detail_base_info.py:93 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_list_detail_base_info.py:95 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-泵站管理列表及详情
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_list_detail_base_info.py::TestJinYangApi::test_pump_station_info_api[/udims/pump-station/detail-POST-None-None-{\n &quot;pkid&quot;: 11\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.10</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:test_jy_list_detail_base_info.py:106 *************** 开始执行用例 ***************
+INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/pump-station/detail
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;pkid&quot;: 11
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;,&quot;data&quot;:{&quot;pkid&quot;:null,&quot;psNo&quot;:null,&quot;code&quot;:null,&quot;psName&quot;:null,&quot;address&quot;:null,&quot;lgtd&quot;:null,&quot;lttd&quot;:null,&quot;psType&quot;:null,&quot;psTypeName&quot;:null,&quot;pumpNum&quot;:null,&quot;ownerUnit&quot;:null,&quot;contactInfo&quot;:null,&quot;psStatus&quot;:null,&quot;psStatusName&quot;:null,&quot;psCreateTime&quot;:null,&quot;desRainSize&quot;:null,&quot;desWasteSize&quot;:null,&quot;realRainSize&quot;:null,&quot;realWasteSize&quot;:null,&quot;forebayLength&quot;:null,&quot;forebayWidth&quot;:null,&quot;forebayDepth&quot;:null,&quot;insumpMaxHeigth&quot;:null,&quot;insumpMaxRunHeigth&quot;:null,&quot;insumpMinRunHeigth&quot;:null,&quot;insumpDesignHeigth&quot;:null,&quot;outsumpMaxRunHeigth&quot;:null,&quot;outsumpMinRunHeigth&quot;:null,&quot;outsumpDesignHeigth&quot;:null,&quot;area&quot;:null,&quot;serviceArea&quot;:null,&quot;serviceScope&quot;:null,&quot;stormRecurrent&quot;:null,&quot;installedCapacity&quot;:null,&quot;masterPowerSupply&quot;:null,&quot;backupPowerSupply&quot;:null,&quot;bopDes&quot;:null,&quot;fillUserName&quot;:null,&quot;fillDate&quot;:null,&quot;dataSource&quot;:null,&quot;dataSourceName&quot;:null,&quot;dataSourceNotes&quot;:null,&quot;remark&quot;:null,&quot;imageIds&quot;:null,&quot;pumpList&quot;:null,&quot;moniEquipmentList&quot;:[],&quot;attachmentList&quot;:[]}}
+INFO     log:test_jy_list_detail_base_info.py:111 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_list_detail_base_info.py:113 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-泵站管理列表及详情
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_list_detail_base_info.py::TestJinYangApi::test_pump_station_info_api[/udims/pump-station/list-POST-None-None-{\n &quot;curPage&quot;: 1,\n &quot;pageSize&quot;: 5,\n &quot;psCreateTime&quot;: &quot;&quot;,\n &quot;psName&quot;: &quot;&quot;,\n &quot;psStatus&quot;: &quot;&quot;,\n &quot;psType&quot;: &quot;&quot;\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.12</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:test_jy_list_detail_base_info.py:106 *************** 开始执行用例 ***************
+INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/pump-station/list
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;curPage&quot;: 1,
+    &quot;pageSize&quot;: 5,
+    &quot;psCreateTime&quot;: &quot;&quot;,
+    &quot;psName&quot;: &quot;&quot;,
+    &quot;psStatus&quot;: &quot;&quot;,
+    &quot;psType&quot;: &quot;&quot;
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;,&quot;data&quot;:{&quot;curPage&quot;:1,&quot;pageSize&quot;:5,&quot;total&quot;:11,&quot;rows&quot;:[{&quot;pkid&quot;:&quot;fbe9dc83-1a5c-4046-83fe-8ba9e4f0a0a9&quot;,&quot;psNo&quot;:&quot;0401028100300026&quot;,&quot;code&quot;:&quot;0401028100300026&quot;,&quot;psName&quot;:&quot;西园泵站&quot;,&quot;address&quot;:&quot;湖南省长沙市浏阳市绿之韵路&quot;,&quot;psType&quot;:&quot;BZ_02&quot;,&quot;psTypeName&quot;:&quot;污水泵站&quot;,&quot;pumpNum&quot;:4,&quot;ownerUnit&quot;:&quot;城管分局管网办&quot;,&quot;psStatus&quot;:&quot;1&quot;,&quot;psStatusName&quot;:&quot;已建&quot;,&quot;psCreateTime&quot;:&quot;2021-10-26&quot;,&quot;orderNum&quot;:1},{&quot;pkid&quot;:&quot;f8b0c349-05ec-48e1-a203-935c8ea45adb&quot;,&quot;psNo&quot;:&quot;0401028100300027&quot;,&quot;code&quot;:&quot;0401028100300027&quot;,&quot;psName&quot;:&quot;景观桥泵站&quot;,&quot;address&quot;:&quot;湖南省长沙市浏阳市康万路&quot;,&quot;psType&quot;:&quot;BZ_02&quot;,&quot;psTypeName&quot;:&quot;污水泵站&quot;,&quot;pumpNum&quot;:99,&quot;ownerUnit&quot;:&quot;城管分局管网办&quot;,&quot;psStatus&quot;:&quot;1&quot;,&quot;psStatusName&quot;:&quot;已建&quot;,&quot;psCreateTime&quot;:&quot;2021-10-28&quot;,&quot;orderNum&quot;:2},{&quot;pkid&quot;:&quot;b2bbd775-07e3-40f9-a87b-cb36956fd63c&quot;,&quot;psNo&quot;:&quot;0401028100300030&quot;,&quot;code&quot;:&quot;0401028100300030&quot;,&quot;psName&quot;:&quot;铁路公园泵站&quot;,&quot;address&quot;:&quot;南山区兴海大道24&quot;,&quot;psType&quot;:&quot;BZ_02&quot;,&quot;psTypeName&quot;:&quot;污水泵站&quot;,&quot;pumpNum&quot;:1,&quot;ownerUnit&quot;:&quot;城管分局管网办&quot;,&quot;psStatus&quot;:&quot;1&quot;,&quot;psStatusName&quot;:&quot;已建&quot;,&quot;psCreateTime&quot;:&quot;2021-10-30&quot;,&quot;orderNum&quot;:3},{&quot;pkid&quot;:&quot;abe0ee90-60c9-4b83-9246-02896bb1086a&quot;,&quot;psNo&quot;:&quot;0401028100300031&quot;,&quot;code&quot;:&quot;0401028100300031&quot;,&quot;psName&quot;:&quot;尔康泵站&quot;,&quot;address&quot;:&quot;湖南省长沙市浏阳市永和村胡家组&quot;,&quot;psType&quot;:&quot;BZ_02&quot;,&quot;psTypeName&quot;:&quot;污水泵站&quot;,&quot;pumpNum&quot;:99,&quot;ownerUnit&quot;:&quot;城管分局管网办&quot;,&quot;psStatus&quot;:&quot;1&quot;,&quot;psStatusName&quot;:&quot;已建&quot;,&quot;psCreateTime&quot;:&quot;2021-10-28&quot;,&quot;orderNum&quot;:4},{&quot;pkid&quot;:&quot;a3b69d0a-713a-459a-99a9-4d50dd830d7b&quot;,&quot;psNo&quot;:&quot;0401028100300032&quot;,&quot;code&quot;:&quot;0401028100300032&quot;,&quot;psName&quot;:&quot;南园泵站&quot;,&quot;address&quot;:&quot;湖南省长沙市浏阳市健康大道&quot;,&quot;psType&quot;:&quot;BZ_02&quot;,&quot;psTypeName&quot;:&quot;污水泵站&quot;,&quot;pumpNum&quot;:99,&quot;ownerUnit&quot;:&quot;城管分局管网办&quot;,&quot;psStatus&quot;:&quot;1&quot;,&quot;psStatusName&quot;:&quot;已建&quot;,&quot;psCreateTime&quot;:&quot;2021-10-28&quot;,&quot;orderNum&quot;:5}]}}
+INFO     log:test_jy_list_detail_base_info.py:111 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_list_detail_base_info.py:113 *************** 结束执行用例 ***************</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <th>
+        金阳项目-监测点管理列表及详情
+        </th>
+          <td class="col-name">testcases/jin_yang_dev/test_jy_list_detail_base_info.py::TestJinYangApi::test_monitor_point_info_api[/udims/monitor-point/list-POST-None-None-{\n &quot;curPage&quot;: 1,\n &quot;endTime&quot;: &quot;&quot;,\n &quot;moniDataType&quot;: &quot;&quot;,\n &quot;pageSize&quot;: 5,\n &quot;pointName&quot;: &quot;&quot;,\n &quot;pointStatus&quot;: 0,\n &quot;startTime&quot;: &quot;&quot;\n}-None-200-\u6210\u529f]</td>
+          <td class="col-duration">0.10</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="5">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     log:test_jy_list_detail_base_info.py:124 *************** 开始执行用例 ***************
+INFO     log:request_base.py:52 接口请求地址 ==&gt;&gt; http://30.79.117.99:30470/udims/monitor-point/list
+INFO     log:request_base.py:53 接口请求方式 ==&gt;&gt; POST
+INFO     log:request_base.py:55 接口请求头 ==&gt;&gt; null
+INFO     log:request_base.py:56 接口请求 params 参数 ==&gt;&gt; null
+INFO     log:request_base.py:57 接口请求体 data 参数 ==&gt;&gt; null
+INFO     log:request_base.py:58 接口请求体 json 参数 ==&gt;&gt; {
+    &quot;curPage&quot;: 1,
+    &quot;endTime&quot;: &quot;&quot;,
+    &quot;moniDataType&quot;: &quot;&quot;,
+    &quot;pageSize&quot;: 5,
+    &quot;pointName&quot;: &quot;&quot;,
+    &quot;pointStatus&quot;: 0,
+    &quot;startTime&quot;: &quot;&quot;
+}
+INFO     log:request_base.py:59 接口上传附件 files 参数 ==&gt;&gt; None
+INFO     log:request_base.py:60 接口 cookies 参数 ==&gt;&gt; null
+INFO     log:jin_yang_dev.py:44 返回结果 ==&gt;&gt; {&quot;code&quot;:200,&quot;msg&quot;:&quot;成功&quot;,&quot;data&quot;:{&quot;curPage&quot;:1,&quot;pageSize&quot;:5,&quot;total&quot;:107,&quot;rows&quot;:[{&quot;orderNum&quot;:1,&quot;pkid&quot;:&quot;f2d07e82-7465-40ec-be61-3f8555f3e7a7&quot;,&quot;code&quot;:&quot;0604009643900558&quot;,&quot;pointCode&quot;:&quot;0604009643900558&quot;,&quot;pointName&quot;:&quot;测试监测点&quot;,&quot;typeOfFacility&quot;:&quot;5&quot;,&quot;typeOfFacilityName&quot;:&quot;泵站&quot;,&quot;facilityOfName&quot;:&quot;永社公路泵站&quot;,&quot;detailedAddress&quot;:&quot;湖南省长沙市浏阳市健安大道&quot;,&quot;moniDataType&quot;:&quot;3&quot;,&quot;moniDataTypeName&quot;:&quot;流量&quot;,&quot;moniWay&quot;:1,&quot;moniWayName&quot;:&quot;人工&quot;,&quot;ownershipUnits&quot;:&quot;外网 &quot;,&quot;pointStatus&quot;:0,&quot;pointStatusName&quot;:&quot;有效&quot;,&quot;buildTime&quot;:&quot;2021-11-11&quot;},{&quot;orderNum&quot;:2,&quot;pkid&quot;:&quot;414a752c-b2c3-4c2b-99a1-a86bcf9a3a7c&quot;,&quot;code&quot;:&quot;0604009643900557&quot;,&quot;pointCode&quot;:&quot;0604009643900557&quot;,&quot;pointName&quot;:&quot;1&quot;,&quot;typeOfFacility&quot;:&quot;1&quot;,&quot;typeOfFacilityName&quot;:&quot;检查井&quot;,&quot;facilityOfName&quot;:&quot;43YS26-2&quot;,&quot;detailedAddress&quot;:&quot;湖南省长沙市浏阳市洞阳镇康里路&quot;,&quot;moniDataType&quot;:&quot;3&quot;,&quot;moniDataTypeName&quot;:&quot;流量&quot;,&quot;moniWay&quot;:1,&quot;moniWayName&quot;:&quot;人工&quot;,&quot;ownershipUnits&quot;:&quot;1&quot;,&quot;pointStatus&quot;:0,&quot;pointStatusName&quot;:&quot;有效&quot;,&quot;buildTime&quot;:&quot;2021-11-11&quot;},{&quot;orderNum&quot;:3,&quot;pkid&quot;:&quot;efe5a3f8-7ee3-4623-a95c-d7331fd3379e&quot;,&quot;code&quot;:&quot;0604009643900452&quot;,&quot;pointCode&quot;:&quot;0604009643900452&quot;,&quot;pointName&quot;:&quot;泵名1&quot;,&quot;typeOfFacility&quot;:&quot;10&quot;,&quot;typeOfFacilityName&quot;:&quot;泵站-泵&quot;,&quot;facilityOfName&quot;:&quot;泵名1&quot;,&quot;detailedAddress&quot;:&quot;1111&quot;,&quot;moniDataType&quot;:&quot;3&quot;,&quot;moniDataTypeName&quot;:&quot;流量&quot;,&quot;moniWay&quot;:2,&quot;moniWayName&quot;:&quot;自动&quot;,&quot;ownershipUnits&quot;:&quot;城管分局管网办&quot;,&quot;pointStatus&quot;:0,&quot;pointStatusName&quot;:&quot;有效&quot;,&quot;buildTime&quot;:&quot;2021-10-31&quot;},{&quot;orderNum&quot;:4,&quot;pkid&quot;:&quot;f0d23442-a532-4f18-8932-558d92e32e6b&quot;,&quot;code&quot;:&quot;0604009643900451&quot;,&quot;pointCode&quot;:&quot;0604009643900451&quot;,&quot;pointName&quot;:&quot;泵名&quot;,&quot;typeOfFacility&quot;:&quot;10&quot;,&quot;typeOfFacilityName&quot;:&quot;泵站-泵&quot;,&quot;facilityOfName&quot;:&quot;泵名&quot;,&quot;detailedAddress&quot;:&quot;111&quot;,&quot;moniDataType&quot;:&quot;3&quot;,&quot;moniDataTypeName&quot;:&quot;流量&quot;,&quot;moniWay&quot;:2,&quot;moniWayName&quot;:&quot;自动&quot;,&quot;ownershipUnits&quot;:&quot;城管分局管网办&quot;,&quot;pointStatus&quot;:0,&quot;pointStatusName&quot;:&quot;有效&quot;,&quot;buildTime&quot;:&quot;2021-10-31&quot;},{&quot;orderNum&quot;:5,&quot;pkid&quot;:&quot;24891873-d639-4997-8407-463e29a23c2c&quot;,&quot;code&quot;:&quot;0604009643900534&quot;,&quot;pointCode&quot;:&quot;0604009643900534&quot;,&quot;pointName&quot;:&quot;北园污水泵液位&quot;,&quot;typeOfFacility&quot;:&quot;5&quot;,&quot;typeOfFacilityName&quot;:&quot;泵站&quot;,&quot;facilityOfName&quot;:&quot;北园泵站&quot;,&quot;detailedAddress&quot;:&quot;dd&quot;,&quot;moniDataType&quot;:&quot;2&quot;,&quot;moniDataTypeName&quot;:&quot;液位&quot;,&quot;moniWay&quot;:2,&quot;moniWayName&quot;:&quot;自动&quot;,&quot;ownershipUnits&quot;:&quot;城管分局管网办&quot;,&quot;pointStatus&quot;:0,&quot;pointStatusName&quot;:&quot;有效&quot;,&quot;buildTime&quot;:&quot;2021-10-30&quot;}]}}
+INFO     log:test_jy_list_detail_base_info.py:129 code ==&gt;&gt; 期望结果：200， 实际结果：【 200 】
+INFO     log:test_jy_list_detail_base_info.py:131 *************** 结束执行用例 ***************</div></td></tr></tbody></table></body></html>

@@ -1,0 +1,10 @@
+
+
+init_sql:
+  insert_delete_data:
+    - "INSERT INTO ads_qenvwater.ads_q_envwater_data_rule
+      (rule_id, rule_name, rule_type, exception_rule, data_validity, is_delete, entry_time, update_time)
+      VALUES('29906a146ca94c668bc980ce8a9e5d23', 'AutoTest04', '2', '1', '2', 0, now(), now());"
+#    - "DELETE FROM ads_qenvwater.ads_q_envwater_data_rule WHERE rule_id = '24986a146ca94c668ac980ce8b9e5d23'"
+  delete_data: "DELETE FROM ads_qenvwater.ads_q_envwater_data_rule WHERE rule_id = '24986a146ca94c668ac980ce8b9e5d23'"
+  update_data: "UPDATE ads_qenvwater.ads_q_envwater_data_rule SET rule_name = 'AutoTestUpdate' WHERE rule_id = '24986a146ca94c668ac980ce8b9e5d23'"
